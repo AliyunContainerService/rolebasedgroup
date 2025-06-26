@@ -25,3 +25,11 @@ const (
 
 	GroupSizeAnnotationKey string = RBGDomainPrefix + "group-size"
 )
+
+type AdapterPhase string
+
+const (
+	AdapterPhaseNone     AdapterPhase = ""
+	AdapterPhaseNotBound AdapterPhase = "NotBound"
+	AdapterPhaseBound    AdapterPhase = "Bound"
+)

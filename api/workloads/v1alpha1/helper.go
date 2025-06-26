@@ -53,3 +53,12 @@ func (rbg *RoleBasedGroup) GetRoleStatus(roleName string) (status RoleStatus, fo
 	}
 	return
 }
+
+func (rbgsa *RoleBasedGroupScalingAdapter) ContainsRbgOwner(rbg *RoleBasedGroup) bool {
+	for _, owner := range rbgsa.OwnerReferences {
+		if owner.UID == rbg.UID {
+			return true
+		}
+	}
+	return false
+}

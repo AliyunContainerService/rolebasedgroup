@@ -260,6 +260,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	rbgScalingAdapterReconciler := workloadscontroller.NewRoleBasedGroupScalingAdapterReconciler(mgr)
+	if err = rbgScalingAdapterReconciler.CheckCrdExists(); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroupScalingAdapter")
+		os.Exit(1)
+	}
+	if err = rbgScalingAdapterReconciler.SetupWithManager(mgr, options); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroupScalingAdapter")
+		os.Exit(1)
+	}
+
 	rbgsReconciler := workloadscontroller.NewRoleBasedGroupSetReconciler(mgr)
 	if err = rbgsReconciler.CheckCrdExists(); err != nil {
 		setupLog.Error(err, "unable to create rbgs controller", "controller", "RoleBasedGroupSet")

@@ -59,3 +59,11 @@ const (
 	StatefulSetWorkloadType     string = "apps/v1/StatefulSet"
 	LeaderWorkerSetWorkloadType string = "leaderworkerset.x-k8s.io/v1/LeaderWorkerSet"
 )
+
+type AdapterPhase string
+
+const (
+	AdapterPhaseNone     AdapterPhase = ""
+	AdapterPhaseNotBound AdapterPhase = "NotBound"
+	AdapterPhaseBound    AdapterPhase = "Bound"
+)

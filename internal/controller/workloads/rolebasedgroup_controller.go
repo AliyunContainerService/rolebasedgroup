@@ -104,7 +104,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{RequeueAfter: 5}, nil
 		}
 
-		reconciler, err := reconciler.NewWorkloadReconciler(role.Workload.APIVersion, role.Workload.Kind, r.scheme, r.client)
+		reconciler, err := reconciler.NewWorkloadReconciler(role.Workload, r.scheme, r.client)
 		if err != nil {
 			logger.Error(err, "Failed to create workload reconciler")
 			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,
@@ -129,13 +129,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if updateStatus {
-		conditions := r.updateConditions(roleStatuses)
-
-		// update rbg status
-		rbgApplyConfig := utils.RoleBasedGroup(rbg.Name, rbg.Namespace, rbg.Kind, rbg.APIVersion).
-			WithStatus(utils.RbgStatus().WithRoleStatuses(roleStatuses...).WithConditions(conditions))
-
-		if err := utils.PatchObjectApplyConfiguration(ctx, r.client, rbgApplyConfig, utils.PatchStatus); err != nil {
+		if err := r.updateRBGStatus(ctx, rbg, roleStatuses); err != nil {
 			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedUpdateStatus,
 				"Failed to update status for %s: %v", rbg.Name, err)
 			return ctrl.Result{}, err
@@ -173,10 +167,12 @@ func (r *RoleBasedGroupReconciler) deleteRoles(ctx context.Context, rbg *workloa
 	return errors.NewAggregate(errs)
 }
 
-func (r *RoleBasedGroupReconciler) updateConditions(roleStatus []workloadsv1alpha1.RoleStatus) metav1.Condition {
+func (r *RoleBasedGroupReconciler) updateRBGStatus(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, roleStatus []workloadsv1alpha1.RoleStatus) error {
+	// update ready condition
+	var readyCondition metav1.Condition
 	for _, role := range roleStatus {
 		if role.ReadyReplicas != role.Replicas {
-			return metav1.Condition{
+			readyCondition = metav1.Condition{
 				Type:               string(workloadsv1alpha1.RoleBasedGroupReady),
 				Status:             metav1.ConditionFalse,
 				LastTransitionTime: metav1.Now(),
@@ -186,13 +182,40 @@ func (r *RoleBasedGroupReconciler) updateConditions(roleStatus []workloadsv1alph
 		}
 	}
 
-	return metav1.Condition{
+	readyCondition = metav1.Condition{
 		Type:               string(workloadsv1alpha1.RoleBasedGroupReady),
 		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
 		Reason:             "AllRolesReady",
 		Message:            "All roles are ready",
 	}
+
+	setCondition(rbg, readyCondition)
+
+	// update role status
+	for i := range roleStatus {
+		found := false
+		for j, oldStatus := range rbg.Status.RoleStatuses {
+			// if found, update
+			if roleStatus[i].Name == oldStatus.Name {
+				found = true
+				if roleStatus[i].Replicas != oldStatus.Replicas || roleStatus[i].ReadyReplicas != oldStatus.ReadyReplicas {
+					rbg.Status.RoleStatuses[j] = roleStatus[i]
+				}
+				break
+			}
+		}
+		if !found {
+			rbg.Status.RoleStatuses = append(rbg.Status.RoleStatuses, roleStatus[i])
+		}
+	}
+
+	// update rbg status
+	rbgApplyConfig := utils.RoleBasedGroup(rbg.Name, rbg.Namespace, rbg.Kind, rbg.APIVersion).
+		WithStatus(utils.RbgStatus().WithRoleStatuses(rbg.Status.RoleStatuses).WithConditions(rbg.Status.Conditions))
+
+	return utils.PatchObjectApplyConfiguration(ctx, r.client, rbgApplyConfig, utils.PatchStatus)
+
 }
 
 // SetupWithManager sets up the controller with the Manager.

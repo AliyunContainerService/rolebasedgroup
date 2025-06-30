@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	coreapplyv1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -19,6 +20,7 @@ import (
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/utils"
 	"strconv"
+	"time"
 )
 
 type StatefulSetReconciler struct {
@@ -47,11 +49,12 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 	logger := log.FromContext(ctx)
 	logger.V(1).Info("start to reconciling sts workload")
 
-	err := validateRolloutStrategy(role.RolloutStrategy.RollingUpdate, int(*role.Replicas))
+	rollingUpdate, err := validateRolloutStrategy(role.RolloutStrategy.RollingUpdate, int(*role.Replicas))
 	if err != nil {
 		logger.Error(err, "Invalid rollout strategy")
 		return err
 	}
+	role.RolloutStrategy.RollingUpdate = rollingUpdate
 
 	stsApplyConfig, err := r.constructStatefulSetApplyConfiguration(ctx, rbg, role)
 	if err != nil {
@@ -288,10 +291,9 @@ func rollingUpdatePartition(ctx context.Context, states []replicaState, stsRepli
 	// (for example, all replicas are not ready when rolling update is started).
 	// Note that we never drop the partition below rollingStepPartition.
 	for idx := min(partition, stsReplicas-1); idx >= rollingStepPartition; idx-- {
-		if states[idx].ready && states[idx].updated {
-			continue
-		} else {
+		if !states[idx].ready || states[idx].updated {
 			partition = idx
+		} else {
 			break
 		}
 	}
@@ -311,6 +313,7 @@ func calculateContinuousReadyReplicas(states []replicaState) int32 {
 	}
 	return continuousReadyCount
 }
+
 func (r *StatefulSetReconciler) reconcileHeadlessService(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
 	logger := log.FromContext(ctx)
 	logger.V(1).Info("start to reconciling headless service")
@@ -444,10 +447,6 @@ func (r *StatefulSetReconciler) ConstructRoleStatus(
 	return status, updateStatus, nil
 }
 
-func (r *StatefulSetReconciler) GetWorkloadType() string {
-	return "apps/v1/StatefulSet"
-}
-
 func (r *StatefulSetReconciler) CheckWorkloadReady(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (bool, error) {
 	sts := &appsv1.StatefulSet{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, sts); err != nil {
@@ -500,6 +499,50 @@ func (r *StatefulSetReconciler) getHighestRevision(ctx context.Context, sts *app
 		return nil, err
 	}
 	return utils.GetHighestRevision(revisions), nil
+}
+
+func (r *StatefulSetReconciler) RecreateWorkload(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
+	logger := log.FromContext(ctx)
+	if rbg == nil || role == nil {
+		return nil
+	}
+
+	stsName := rbg.GetWorkloadName(role)
+	var sts appsv1.StatefulSet
+	err := r.client.Get(ctx, types.NamespacedName{Name: stsName, Namespace: rbg.Namespace}, &sts)
+	// if sts is not found, skip delete sts
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	logger.Info(fmt.Sprintf("Recreate sts workload, delete sts %s", stsName))
+	if err := r.client.Delete(ctx, &sts); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	// wait new sts create
+	var retErr error
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		var newSts appsv1.StatefulSet
+		retErr = r.client.Get(ctx, types.NamespacedName{Name: stsName, Namespace: rbg.Namespace}, &newSts)
+		if retErr != nil {
+			if apierrors.IsNotFound(retErr) {
+				return false, nil
+			}
+			return false, retErr
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		logger.Error(retErr, "wait new sts creating error")
+		return retErr
+	}
+
+	return nil
 }
 
 func SemanticallyEqualStatefulSet(sts1, sts2 *appsv1.StatefulSet) (bool, error) {
@@ -557,26 +600,26 @@ func SemanticallyEqualService(svc1, svc2 *corev1.Service) (bool, error) {
 	return true, nil
 }
 
-func validateRolloutStrategy(rollingUpdate *workloadsv1alpha1.RollingUpdate, replicas int) error {
+func validateRolloutStrategy(rollingUpdate *workloadsv1alpha1.RollingUpdate, replicas int) (*workloadsv1alpha1.RollingUpdate, error) {
 	if rollingUpdate == nil {
 		rollingUpdate = &workloadsv1alpha1.RollingUpdate{
 			MaxUnavailable: intstr.FromInt32(1),
 			MaxSurge:       intstr.FromInt32(0),
 		}
-		return nil
+		return rollingUpdate, nil
 	}
 
 	maxSurge, err := intstr.GetScaledValueFromIntOrPercent(&rollingUpdate.MaxSurge, replicas, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	maxAvailable, err := intstr.GetScaledValueFromIntOrPercent(&rollingUpdate.MaxUnavailable, replicas, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if maxAvailable == 0 && maxSurge == 0 {
-		return fmt.Errorf("RollingUpdate is invalid: rolloutStrategy.rollingUpdate.maxUnavailable may not be 0 when maxSurge is 0")
+		return nil, fmt.Errorf("RollingUpdate is invalid: rolloutStrategy.rollingUpdate.maxUnavailable may not be 0 when maxSurge is 0")
 	}
 
-	return nil
+	return rollingUpdate, nil
 }

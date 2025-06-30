@@ -52,6 +52,11 @@ func (roleWrapper *RoleWrapper) WithDependencies(dependencies []string) *RoleWra
 	return roleWrapper
 }
 
+func (roleWrapper *RoleWrapper) WithRestartPolicy(restartPolicy workloadsv1alpha.RestartPolicyType) *RoleWrapper {
+	roleWrapper.RestartPolicy = restartPolicy
+	return roleWrapper
+}
+
 func (roleWrapper *RoleWrapper) WithWorkload(workloadType string) *RoleWrapper {
 	switch strings.ToLower(workloadType) {
 	case "deployment", "deploy":

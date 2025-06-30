@@ -64,44 +64,12 @@ func RbgStatus() *RbgStatusApplyConfiguration {
 	return &RbgStatusApplyConfiguration{}
 }
 
-func (b *RbgStatusApplyConfiguration) WithConditions(conditions ...v1.Condition) *RbgStatusApplyConfiguration {
-
-	for i := range conditions {
-		found := false
-		for j, cond := range b.Conditions {
-			if conditions[i].Type == cond.Type {
-				found = true
-				if conditions[i].Status != cond.Status {
-					b.Conditions[j] = conditions[i]
-				}
-				break
-			}
-		}
-		if !found {
-			b.Conditions = append(b.Conditions, conditions[i])
-		}
-	}
-
+func (b *RbgStatusApplyConfiguration) WithConditions(conditions []v1.Condition) *RbgStatusApplyConfiguration {
+	b.Conditions = conditions
 	return b
 }
 
-func (b *RbgStatusApplyConfiguration) WithRoleStatuses(values ...v1alpha1.RoleStatus) *RbgStatusApplyConfiguration {
-	for i := range values {
-		found := false
-		for j, oldStatus := range b.RoleStatuses {
-			// if found, update
-			if values[i].Name == oldStatus.Name {
-				found = true
-				if values[i].Replicas != oldStatus.Replicas || values[i].ReadyReplicas != oldStatus.ReadyReplicas {
-					b.RoleStatuses[j] = values[i]
-				}
-				break
-			}
-		}
-		if !found {
-			b.RoleStatuses = append(b.RoleStatuses, values[i])
-		}
-	}
-
+func (b *RbgStatusApplyConfiguration) WithRoleStatuses(roleStatuses []v1alpha1.RoleStatus) *RbgStatusApplyConfiguration {
+	b.RoleStatuses = roleStatuses
 	return b
 }

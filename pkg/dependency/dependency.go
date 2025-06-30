@@ -77,7 +77,7 @@ func (m *DefaultDependencyManager) CheckDependencyReady(ctx context.Context, rbg
 		if err != nil {
 			return false, err
 		}
-		r, err := reconciler.NewWorkloadReconciler(depRole.Workload.APIVersion, depRole.Workload.Kind, m.scheme, m.client)
+		r, err := reconciler.NewWorkloadReconciler(depRole.Workload, m.scheme, m.client)
 		if err != nil {
 			return false, err
 		}

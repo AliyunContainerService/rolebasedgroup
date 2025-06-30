@@ -4,25 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	utilpointer "k8s.io/utils/pointer"
-	"reflect"
-
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/apimachinery/pkg/util/wait"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	utilpointer "k8s.io/utils/pointer"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	lwsapplyv1 "sigs.k8s.io/lws/client-go/applyconfiguration/leaderworkerset/v1"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/utils"
-)
-
-const (
-	defaultRestartPolicyType = lwsv1.RecreateGroupOnPodRestart
+	"time"
 )
 
 type LeaderWorkerSetReconciler struct {
@@ -92,10 +89,6 @@ func (r *LeaderWorkerSetReconciler) ConstructRoleStatus(ctx context.Context, rbg
 	}
 
 	return status, updateStatus, nil
-}
-
-func (r *LeaderWorkerSetReconciler) GetWorkloadType() string {
-	return "leaderworkerset.x-k8s.io/v1/LeaderWorkerSet"
 }
 
 func (r *LeaderWorkerSetReconciler) CheckWorkloadReady(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (bool, error) {
@@ -173,19 +166,36 @@ func (r *LeaderWorkerSetReconciler) constructLWSApplyConfiguration(ctx context.C
 	if role.Replicas == nil {
 		role.Replicas = utilpointer.Int32(1)
 	}
+
+	//RestartPolicy
+	var restartPolicy lwsv1.RestartPolicyType
+	if role.RestartPolicy == "None" {
+		restartPolicy = lwsv1.NoneRestartPolicy
+	} else {
+		// if role has RecreateRBGOnPodRestart or RecreateLWSOnPodRestart policy, set RecreateGroupOnPodRestart for lws
+		// it's safe to do so since
+		// 1. RecreateGroupOnPodRestart is the default restart policy for lws
+		// 2. RecreateRBGOnPodRestart will delete lws if pod recreated or containers restarted
+		restartPolicy = lwsv1.RecreateGroupOnPodRestart
+	}
+
 	lwsSpecConfig := lwsapplyv1.LeaderWorkerSetSpec().WithReplicas(*role.Replicas).
-		WithRolloutStrategy(lwsapplyv1.RolloutStrategy().WithRollingUpdateConfiguration(
-			lwsapplyv1.RollingUpdateConfiguration().
-				WithMaxSurge(role.RolloutStrategy.RollingUpdate.MaxSurge).
-				WithMaxUnavailable(role.RolloutStrategy.RollingUpdate.MaxUnavailable),
-		)).
 		WithLeaderWorkerTemplate(
 			lwsapplyv1.LeaderWorkerTemplate().
 				WithLeaderTemplate(leaderTemplateApplyCfg).
 				WithWorkerTemplate(workerTemplateApplyCfg).
 				WithSize(*role.LeaderWorkerSet.Size).
-				WithRestartPolicy(defaultRestartPolicyType),
+				WithRestartPolicy(restartPolicy),
 		)
+
+	// RollingUpdate
+	if role.RolloutStrategy.RollingUpdate != nil {
+		lwsSpecConfig = lwsSpecConfig.WithRolloutStrategy(lwsapplyv1.RolloutStrategy().WithRollingUpdateConfiguration(
+			lwsapplyv1.RollingUpdateConfiguration().
+				WithMaxSurge(role.RolloutStrategy.RollingUpdate.MaxSurge).
+				WithMaxUnavailable(role.RolloutStrategy.RollingUpdate.MaxUnavailable),
+		))
+	}
 
 	// construct lws apply configuration
 	lwsConfig := lwsapplyv1.LeaderWorkerSet(rbg.GetWorkloadName(role), rbg.Namespace).
@@ -202,6 +212,50 @@ func (r *LeaderWorkerSetReconciler) constructLWSApplyConfiguration(ctx context.C
 		)
 	return lwsConfig, nil
 
+}
+
+func (r *LeaderWorkerSetReconciler) RecreateWorkload(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
+	logger := log.FromContext(ctx)
+	if rbg == nil || role == nil {
+		return nil
+	}
+
+	lwsName := rbg.GetWorkloadName(role)
+	var lws lwsv1.LeaderWorkerSet
+	err := r.client.Get(ctx, types.NamespacedName{Name: lwsName, Namespace: rbg.Namespace}, &lws)
+	// if lws is not found, skip delete lws
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if lws.UID == "" {
+		return nil
+	}
+
+	logger.Info(fmt.Sprintf("Recreate lws workload, delete lws %s", lws.Name))
+	if err := r.client.Delete(ctx, &lws); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	// wait new lws create
+	var retErr error
+	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		var newLws lwsv1.LeaderWorkerSet
+		retErr = r.client.Get(ctx, types.NamespacedName{Name: lwsName, Namespace: rbg.Namespace}, &newLws)
+		if retErr != nil {
+			if apierrors.IsNotFound(retErr) {
+				return false, nil
+			}
+			return false, retErr
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		logger.Error(retErr, "wait new lws creating error")
+		return retErr
+	}
+
+	return nil
 }
 
 func semanticallyEqualLeaderWorkerSet(lws1, lws2 *lwsv1.LeaderWorkerSet) (bool, error) {

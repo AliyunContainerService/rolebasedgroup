@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -95,6 +96,12 @@ type RoleSpec struct {
 	// +optional
 	RolloutStrategy RolloutStrategy `json:"rolloutStrategy,omitempty"`
 
+	// RestartPolicy defines the restart policy when pod failures happen.
+	// +kubebuilder:default=None
+	// +kubebuilder:validation:Enum={None,RecreateRBGOnPodRestart,RecreateLWSOnPodRestart}
+	// +optional
+	RestartPolicy RestartPolicyType `json:"restartPolicy,omitempty"`
+
 	// Dependencies of the role
 	// +optional
 	Dependencies []string `json:"dependencies,omitempty"`
@@ -128,6 +135,10 @@ type WorkloadSpec struct {
 	// +optional
 	// +kubebuilder:default="StatefulSet"
 	Kind string `json:"kind"`
+}
+
+func (w *WorkloadSpec) String() string {
+	return fmt.Sprintf("%s/%s", w.APIVersion, w.Kind)
 }
 
 type EngineRuntime struct {
@@ -221,10 +232,14 @@ const (
 	// the rbg as progressing state.
 	RoleBasedGroupProgressing RoleBasedGroupConditionType = "Progressing"
 
-	// RoleBasedGroupUpdateInProgress means rbg is performing a rolling update. UpdateInProgress
+	// RoleBasedGroupRollingUpdateInProgress means rbg is performing a rolling update. UpdateInProgress
 	// is true when the rbg is in upgrade process after the (leader/worker) template is updated. If only replicas is modified, it will
 	// not be considered as UpdateInProgress.
-	RoleBasedGroupUpdateInProgress RoleBasedGroupConditionType = "UpdateInProgress"
+	RoleBasedGroupRollingUpdateInProgress RoleBasedGroupConditionType = "RollingUpdateInProgress"
+
+	// RoleBasedGroupRestartInProgress means rbg is restarting. RestartInProgress
+	// is true when the rbg is in restart process after the pod is deleted or the container is restarted.
+	RoleBasedGroupRestartInProgress RoleBasedGroupConditionType = "RestartInProgress"
 )
 
 // +kubebuilder:object:root=true

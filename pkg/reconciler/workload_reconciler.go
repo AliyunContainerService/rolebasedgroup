@@ -15,21 +15,21 @@ import (
 type WorkloadReconciler interface {
 	Reconciler(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error
 	ConstructRoleStatus(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (workloadsv1alpha1.RoleStatus, bool, error)
-	GetWorkloadType() string
 	CheckWorkloadReady(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (bool, error)
 	CleanupOrphanedWorkloads(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup) error
+	RecreateWorkload(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error
 }
 
-func NewWorkloadReconciler(apiVersion, kind string, scheme *runtime.Scheme, client client.Client) (WorkloadReconciler, error) {
+func NewWorkloadReconciler(workload workloadsv1alpha1.WorkloadSpec, scheme *runtime.Scheme, client client.Client) (WorkloadReconciler, error) {
 	switch {
-	case apiVersion == "apps/v1" && kind == "Deployment":
+	case workload.String() == workloadsv1alpha1.DeploymentWorkloadType:
 		return NewDeploymentReconciler(scheme, client), nil
-	case apiVersion == "apps/v1" && kind == "StatefulSet":
+	case workload.String() == workloadsv1alpha1.StatefulSetWorkloadType:
 		return NewStatefulSetReconciler(scheme, client), nil
-	case apiVersion == "leaderworkerset.x-k8s.io/v1" && kind == "LeaderWorkerSet":
+	case workload.String() == workloadsv1alpha1.LeaderWorkerSetWorkloadType:
 		return NewLeaderWorkerSetReconciler(scheme, client), nil
 	default:
-		return nil, fmt.Errorf("unsupported workload type: %s/%s", apiVersion, kind)
+		return nil, fmt.Errorf("unsupported workload type: %s", workload.String())
 	}
 }
 

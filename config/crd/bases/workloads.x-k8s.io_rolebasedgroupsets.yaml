@@ -1421,6 +1421,15 @@ spec:
                           format: int32
                           minimum: 0
                           type: integer
+                        restartPolicy:
+                          default: None
+                          description: RestartPolicy defines the restart policy when
+                            pod failures happen.
+                          enum:
+                          - None
+                          - RecreateRBGOnPodRestart
+                          - RecreateLWSOnPodRestart
+                          type: string
                         rolloutStrategy:
                           description: |-
                             RolloutStrategy defines the strategy that will be applied to update replicas

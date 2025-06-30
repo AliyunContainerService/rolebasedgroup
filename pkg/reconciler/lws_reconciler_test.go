@@ -169,7 +169,7 @@ var (
 						},
 					},
 				},
-				RestartPolicy: defaultRestartPolicyType,
+				RestartPolicy: lwsv1.NoneRestartPolicy,
 			},
 		},
 	}

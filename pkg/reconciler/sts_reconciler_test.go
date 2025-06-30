@@ -3,6 +3,7 @@ package reconciler
 import (
 	"context"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/utils/pointer"
 	"reflect"
 	"sigs.k8s.io/rbgs/test/wrappers"
@@ -350,6 +351,16 @@ func TestStatefulSetReconciler_rollingUpdateParameters(t *testing.T) {
 				ctx:  context.TODO(),
 				role: roleWrapper.WithMaxUnavailable(2).WithMaxSurge(2).Obj(),
 				sts: &appsv1.StatefulSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "rolling-update-test",
+						Annotations: map[string]string{
+							workloadsv1alpha1.RoleSizeAnnotationKey: "4",
+						},
+						Labels: map[string]string{
+							workloadsv1alpha1.SetNameLabelKey: "rolling-update-test",
+						},
+						UID: uuid.NewUUID(),
+					},
 					Spec: appsv1.StatefulSetSpec{
 						Replicas: pointer.Int32(4),
 						Template: wrappers.BuildPodSpec(),
@@ -379,6 +390,7 @@ func TestStatefulSetReconciler_rollingUpdateParameters(t *testing.T) {
 						Labels: map[string]string{
 							workloadsv1alpha1.SetNameLabelKey: "rolling-update-test",
 						},
+						UID: uuid.NewUUID(),
 					},
 					Spec: appsv1.StatefulSetSpec{
 						Replicas: pointer.Int32(6),

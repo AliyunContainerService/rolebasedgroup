@@ -245,23 +245,29 @@ func main() {
 
 	rbgReconciler := workloadscontroller.NewRoleBasedGroupReconciler(mgr)
 	if err = rbgReconciler.CheckCrdExists(); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroup")
+		setupLog.Error(err, "unable to create rbg controller", "controller", "RoleBasedGroup")
 		os.Exit(1)
 	}
 
 	if err = rbgReconciler.SetupWithManager(mgr, options); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroup")
+		setupLog.Error(err, "unable to create rbg controller", "controller", "RoleBasedGroup")
+		os.Exit(1)
+	}
+
+	podReconciler := workloadscontroller.NewPodReconciler(mgr)
+	if err = podReconciler.SetupWithManager(mgr, options); err != nil {
+		setupLog.Error(err, "unable to create pod controller", "controller", "Pod")
 		os.Exit(1)
 	}
 
 	rbgsReconciler := workloadscontroller.NewRoleBasedGroupSetReconciler(mgr)
 	if err = rbgsReconciler.CheckCrdExists(); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroupSet")
+		setupLog.Error(err, "unable to create rbgs controller", "controller", "RoleBasedGroupSet")
 		os.Exit(1)
 	}
 
 	if err = rbgsReconciler.SetupWithManager(mgr, options); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroupSet")
+		setupLog.Error(err, "unable to create rbgs controller", "controller", "RoleBasedGroupSet")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

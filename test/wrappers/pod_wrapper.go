@@ -5,15 +5,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"time"
 )
 
 type PodWrapper struct {
 	corev1.Pod
 }
 
-func (podWrapper *PodWrapper) Obj() corev1.Pod {
-	return podWrapper.Pod
+func (podWrapper *PodWrapper) Obj() *corev1.Pod {
+	return &podWrapper.Pod
 }
+
 func (podWrapper *PodWrapper) WithName(name string) *PodWrapper {
 	podWrapper.Name = name
 	return podWrapper
@@ -54,6 +56,20 @@ func BuildBasicPod() *PodWrapper {
 		corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-pod",
+			},
+			Spec: BuildPodSpec().Spec,
+		},
+	}
+}
+
+func BuildDeletingPod() *PodWrapper {
+	return &PodWrapper{
+		corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-pod",
+				Namespace:         "default",
+				DeletionTimestamp: &metav1.Time{Time: time.Now()},
+				Finalizers:        []string{"kubernetes.io/rolebasedgroup-controller"},
 			},
 			Spec: BuildPodSpec().Spec,
 		},

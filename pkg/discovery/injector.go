@@ -84,11 +84,16 @@ func (i *DefaultInjector) InjectConfig(ctx context.Context, podSpec *corev1.PodT
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
-	equal, diff := semanticallyEqualConfigmap(oldConfigmap, newConfigmap)
+	equal, err := utils.ObjectsEqual(oldConfigmap, newConfigmap)
+	if err != nil {
+		logger.Error(err, "compare configmap error")
+		return err
+	}
 	if equal {
 		logger.V(1).Info("configmap equal, skip reconcile")
 	} else {
-		logger.V(1).Info(fmt.Sprintf("confgmap not equal, diff: %s", diff))
+		logger.V(1).Info(fmt.Sprintf("confgmap not equal, old: %s, new: %s",
+			utils.PrettyJson(oldConfigmap), utils.PrettyJson(newConfigmap)))
 		if err := utils.PatchObjectApplyConfiguration(ctx, i.client, cmApplyConfig, utils.PatchSpec); err != nil {
 			logger.Error(err, "Failed to patch ConfigMap")
 			return err

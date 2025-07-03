@@ -57,7 +57,7 @@ func BuildBasicPod() *PodWrapper {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-pod",
 			},
-			Spec: BuildPodSpec().Spec,
+			Spec: BuildPodTemplateSpec().Spec,
 		},
 	}
 }
@@ -71,12 +71,12 @@ func BuildDeletingPod() *PodWrapper {
 				DeletionTimestamp: &metav1.Time{Time: time.Now()},
 				Finalizers:        []string{"kubernetes.io/rolebasedgroup-controller"},
 			},
-			Spec: BuildPodSpec().Spec,
+			Spec: BuildPodTemplateSpec().Spec,
 		},
 	}
 }
 
-func BuildPodSpec() corev1.PodTemplateSpec {
+func BuildPodTemplateSpec() corev1.PodTemplateSpec {
 	return corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{

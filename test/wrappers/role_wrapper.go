@@ -85,7 +85,7 @@ func BuildBasicRole(name string) *RoleWrapper {
 		workloadsv1alpha.RoleSpec{
 			Name:     name,
 			Replicas: ptr.To(int32(1)),
-			Template: BuildPodSpec(),
+			Template: BuildPodTemplateSpec(),
 		},
 	}
 }

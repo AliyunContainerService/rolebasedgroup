@@ -1,6 +1,9 @@
 package utils
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	"sort"
+)
 
 // PodRunningAndReady checks if the pod condition is running and marked as ready.
 func PodRunningAndReady(pod corev1.Pod) bool {
@@ -37,6 +40,40 @@ func getPodConditionFromList(conditions []corev1.PodCondition, conditionType cor
 		}
 	}
 	return -1, nil
+}
+
+func SortPodSpec(podSpec corev1.PodSpec) {
+	// sort Volumes
+	sort.Slice(podSpec.Volumes, func(i, j int) bool {
+		return podSpec.Volumes[i].Name < podSpec.Volumes[j].Name
+	})
+
+	// sort InitContainers
+	for i := range podSpec.InitContainers {
+		sortContainer(podSpec.InitContainers[i])
+	}
+	sort.Slice(podSpec.InitContainers, func(i, j int) bool {
+		return podSpec.InitContainers[i].Name < podSpec.InitContainers[j].Name
+	})
+
+	// sort Containers
+	for i := range podSpec.Containers {
+		sortContainer(podSpec.Containers[i])
+	}
+	sort.Slice(podSpec.Containers, func(i, j int) bool {
+		return podSpec.Containers[i].Name < podSpec.Containers[j].Name
+	})
+}
+
+func sortContainer(c corev1.Container) {
+	// sort Env
+	sort.Slice(c.Env, func(i, j int) bool {
+		return c.Env[i].Name < c.Env[j].Name
+	})
+	// sort VolumeMount
+	sort.Slice(c.VolumeMounts, func(i, j int) bool {
+		return c.VolumeMounts[i].Name < c.VolumeMounts[j].Name
+	})
 }
 
 // ContainerRestarted return true when there is any container in the pod that gets restarted

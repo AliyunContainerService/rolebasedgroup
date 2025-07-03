@@ -256,3 +256,24 @@ func TestDeploymentReconciler_ConstructRoleStatus(t *testing.T) {
 		})
 	}
 }
+
+func Test_semanticallyEqualDeployment(t *testing.T) {
+	type args struct {
+		old *appsv1.Deployment
+		new *appsv1.Deployment
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := semanticallyEqualDeployment(tt.args.dep1, tt.args.dep2); got != tt.want {
+				t.Errorf("semanticallyEqualDeployment() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

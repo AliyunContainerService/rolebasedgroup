@@ -2,9 +2,11 @@ package reconciler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
+	"sigs.k8s.io/rbgs/pkg/utils"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,8 +41,8 @@ func WorkloadEqual(obj1, obj2 interface{}) (bool, error) {
 	case *appsv1.Deployment:
 		if o2, ok := obj2.(*appsv1.Deployment); ok {
 			// check spec
-			if equal, err := SemanticallyEqualDeployment(o1, o2); !equal {
-				return false, fmt.Errorf("deploy not equal, error: %s", err.Error())
+			if equal, _ := utils.ObjectsEqual(o1, o2); !equal {
+				return false, errors.New("deploy spec not equal")
 			}
 			// check status
 			if o1.Status.ReadyReplicas != o2.Status.ReadyReplicas {
@@ -52,8 +54,8 @@ func WorkloadEqual(obj1, obj2 interface{}) (bool, error) {
 	case *appsv1.StatefulSet:
 		if o2, ok := obj2.(*appsv1.StatefulSet); ok {
 			// check spec
-			if equal, err := SemanticallyEqualStatefulSet(o1, o2); !equal {
-				return false, fmt.Errorf("sts not equal, error: %s", err.Error())
+			if equal, _ := utils.ObjectsEqual(o1, o2); !equal {
+				return false, errors.New("sts spec not equal")
 			}
 			// check status
 			if o1.Status.ReadyReplicas != o2.Status.ReadyReplicas {
@@ -66,8 +68,8 @@ func WorkloadEqual(obj1, obj2 interface{}) (bool, error) {
 	case *lwsv1.LeaderWorkerSet:
 		if o2, ok := obj2.(*lwsv1.LeaderWorkerSet); ok {
 			// check spec
-			if equal, err := semanticallyEqualLeaderWorkerSet(o1, o2); !equal {
-				return false, fmt.Errorf("lws not equal, error: %s", err.Error())
+			if equal, _ := utils.ObjectsEqual(o1, o2); !equal {
+				return false, errors.New("lws spec not equal")
 			}
 			// check status
 			if o1.Status.ReadyReplicas != o2.Status.ReadyReplicas {

@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	utilpointer "k8s.io/utils/pointer"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
@@ -35,33 +34,39 @@ func NewLeaderWorkerSetReconciler(scheme *runtime.Scheme, client client.Client) 
 
 func (r *LeaderWorkerSetReconciler) Reconciler(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
 	logger := log.FromContext(ctx)
-	logger.V(1).Info("start to reconciling lws workload", "rbg", keyOfRbg(rbg))
+	logger.V(1).Info("start to reconciling lws workload")
 	lwsApplyConfig, err := r.constructLWSApplyConfiguration(ctx, rbg, role)
 	if err != nil {
 		return err
 	}
 	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(lwsApplyConfig)
 	if err != nil {
-		logger.Error(err, "Converting obj apply configuration to json", "rbg", keyOfRbg(rbg))
+		logger.Error(err, "Converting obj apply configuration to json")
 		return err
 	}
 	newLWS := &lwsv1.LeaderWorkerSet{}
 	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj, newLWS); err != nil {
-		logger.Error(err, "convert lwsApplyConfig to lws", "rbg", keyOfRbg(rbg))
+		logger.Error(err, "convert lwsApplyConfig to lws")
 		return err
 	}
 	oldLWS := &lwsv1.LeaderWorkerSet{}
 	err = r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldLWS)
 	if err != nil && !apierrors.IsNotFound(err) {
-		logger.Error(err, "get lws failed", "rbg", keyOfRbg(rbg))
+		logger.Error(err, "get lws failed")
 		return err
 	}
-	equal, err := semanticallyEqualLeaderWorkerSet(oldLWS, newLWS)
+	equal, err := utils.ObjectsEqual(oldLWS, newLWS)
+	if err != nil {
+		logger.Error(err, "compare lws error")
+		return err
+	}
 	if equal {
-		logger.V(1).Info("lws workload equal", "rbg", keyOfRbg(rbg))
+		logger.V(1).Info("lws workload equal")
 		return nil
 	}
-	logger.Info(fmt.Sprintf("lws not equal, diff: %s", err.Error()), "rbg", keyOfRbg(rbg))
+	logger.V(1).Info(fmt.Sprintf("lws not equal, old: %s, new: %s",
+		utils.PrettyJson(oldLWS), utils.PrettyJson(newLWS)))
+
 	if err = utils.PatchObjectApplyConfiguration(ctx, r.client, lwsApplyConfig, utils.PatchSpec); err != nil {
 		logger.Error(err, "Failed to patch lws apply configuration", "rbg", keyOfRbg(rbg))
 		return err
@@ -256,61 +261,6 @@ func (r *LeaderWorkerSetReconciler) RecreateWorkload(ctx context.Context, rbg *w
 	}
 
 	return nil
-}
-
-func semanticallyEqualLeaderWorkerSet(lws1, lws2 *lwsv1.LeaderWorkerSet) (bool, error) {
-	if lws1 == nil || lws2 == nil {
-		if lws1 != lws2 {
-			return false, fmt.Errorf("object is nil")
-		} else {
-			return true, nil
-		}
-	}
-
-	if equal, err := objectMetaEqual(lws1.ObjectMeta, lws2.ObjectMeta); !equal {
-		return false, fmt.Errorf("objectMeta not equal: %s", err.Error())
-	}
-
-	if equal, err := lwsSpecEqual(lws1.Spec, lws2.Spec); !equal {
-		return false, fmt.Errorf("spec not equal: %s", err.Error())
-	}
-
-	return true, nil
-}
-
-func lwsSpecEqual(lws1, lws2 lwsv1.LeaderWorkerSetSpec) (bool, error) {
-	if equal, err := leaderWorkerTemplateEqual(lws1.LeaderWorkerTemplate, lws2.LeaderWorkerTemplate); !equal {
-		return false, fmt.Errorf("leaderWorkerTemplate not equal: %s", err.Error())
-	}
-	if lws1.Replicas == nil {
-		lws1.Replicas = utilpointer.Int32(1)
-	}
-	if lws2.Replicas == nil {
-		lws2.Replicas = utilpointer.Int32(1)
-	}
-	if *lws1.Replicas != *lws2.Replicas {
-		return false, fmt.Errorf("LeaderWorkerSetSpec replicas not equal")
-	}
-	return true, nil
-}
-
-func leaderWorkerTemplateEqual(lwt1, lwt2 lwsv1.LeaderWorkerTemplate) (bool, error) {
-	if equal, err := podTemplateSpecEqual(*lwt1.LeaderTemplate, *lwt2.LeaderTemplate); !equal {
-		return false, fmt.Errorf("leaderTemplate not equal: %s", err.Error())
-	}
-
-	if equal, err := podTemplateSpecEqual(lwt1.WorkerTemplate, lwt2.WorkerTemplate); !equal {
-		return false, fmt.Errorf("workerTemplate not equal: %s", err.Error())
-	}
-
-	if *lwt1.Size != *lwt2.Size {
-		return false, fmt.Errorf("lws size not equal")
-	}
-
-	if !reflect.DeepEqual(lwt1.RestartPolicy, lwt2.RestartPolicy) {
-		return false, fmt.Errorf("restart policy not equal")
-	}
-	return true, nil
 }
 
 func patchPodTemplate(template corev1.PodTemplateSpec, patch runtime.RawExtension) (corev1.PodTemplateSpec, error) {

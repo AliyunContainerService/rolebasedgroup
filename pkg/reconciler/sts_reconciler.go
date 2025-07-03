@@ -14,7 +14,6 @@ import (
 	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	coreapplyv1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
@@ -78,20 +77,22 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 		return err
 	}
 
-	equal, err := SemanticallyEqualStatefulSet(oldSts, newSts)
+	equal, err := utils.ObjectsEqual(oldSts, newSts)
 	if err != nil {
-		logger.V(1).Info(fmt.Sprintf("sts not equal, diff: %s", err.Error()))
-	}
-
-	stsUpdated := !equal
-	partition, replicas, err := r.rollingUpdateParameters(ctx, role, oldSts, stsUpdated)
-	if err != nil {
+		logger.Error(err, "compare sts error")
 		return err
 	}
-
-	if equal && partition == *oldSts.Spec.UpdateStrategy.RollingUpdate.Partition && *oldSts.Spec.Replicas == *role.Replicas {
+	if equal {
 		logger.V(1).Info("sts equal, skip reconcile")
 		return nil
+	}
+
+	logger.V(1).Info(fmt.Sprintf("sts not equal, oldSts: %s, newSts: %s",
+		utils.PrettyJson(oldSts), utils.PrettyJson(newSts)))
+
+	partition, replicas, err := r.rollingUpdateParameters(ctx, role, oldSts, stsUpdate(oldSts, newSts))
+	if err != nil {
+		return err
 	}
 
 	stsApplyConfig = stsApplyConfig.WithSpec(
@@ -201,6 +202,15 @@ func (r *StatefulSetReconciler) rollingUpdateParameters(ctx context.Context, rol
 	replicas := wantReplicas(roleUnreadyReplicas)
 	logger.V(1).Info(fmt.Sprintf("case 5: Calculating the Partition during rolling update. partition %d, replicas: %d", partition, replicas))
 	return partition, replicas, nil
+}
+
+func stsUpdate(oldSts, newSts *appsv1.StatefulSet) bool {
+	oldCopy := oldSts.DeepCopy()
+	utils.SortPodSpec(oldCopy.Spec.Template.Spec)
+	newCopy := newSts.DeepCopy()
+	utils.SortPodSpec(newCopy.Spec.Template.Spec)
+	return utils.ComputeHash(oldCopy.Spec.Template, oldCopy.Spec.Selector) ==
+		utils.ComputeHash(newCopy.Spec.Template, newCopy.Spec.Template)
 }
 
 func calculateRoleUnreadyReplicas(states []replicaState, roleReplicas int32) int32 {
@@ -345,7 +355,11 @@ func (r *StatefulSetReconciler) reconcileHeadlessService(ctx context.Context, rb
 		return err
 	}
 
-	equal, err := SemanticallyEqualService(oldSvc, newSvc)
+	equal, err := utils.ObjectsEqual(oldSvc, newSvc)
+	if err != nil {
+		logger.Error(err, "compare svc error")
+		return err
+	}
 	if equal {
 		logger.V(1).Info("svc equal, skip reconcile")
 		return nil
@@ -543,61 +557,6 @@ func (r *StatefulSetReconciler) RecreateWorkload(ctx context.Context, rbg *workl
 	}
 
 	return nil
-}
-
-func SemanticallyEqualStatefulSet(sts1, sts2 *appsv1.StatefulSet) (bool, error) {
-	if sts1 == nil || sts2 == nil {
-		if sts1 != sts2 {
-			return false, fmt.Errorf("object is nil")
-		} else {
-			return true, nil
-		}
-	}
-
-	if equal, err := objectMetaEqual(sts1.ObjectMeta, sts2.ObjectMeta); !equal {
-		return false, fmt.Errorf("objectMeta not equal: %s", err.Error())
-	}
-
-	if equal, err := statefulSetSpecEqual(sts1.Spec, sts2.Spec); !equal {
-		return false, fmt.Errorf("spec not equal: %s", err.Error())
-	}
-	return true, nil
-}
-
-func statefulSetSpecEqual(spec1, spec2 appsv1.StatefulSetSpec) (bool, error) {
-	if !reflect.DeepEqual(spec1.Selector, spec2.Selector) {
-		return false, fmt.Errorf("selector not equal, old: %v, new: %v", spec1.Selector, spec2.Selector)
-	}
-
-	if spec1.ServiceName != spec2.ServiceName {
-		return false, fmt.Errorf("serviceName not equal, old: %s, new: %s", spec1.ServiceName, spec2.ServiceName)
-	}
-
-	if equal, err := podTemplateSpecEqual(spec1.Template, spec2.Template); !equal {
-		return false, fmt.Errorf("podTemplateSpec not equal, %s", err.Error())
-	}
-
-	return true, nil
-}
-
-func SemanticallyEqualService(svc1, svc2 *corev1.Service) (bool, error) {
-	if svc1 == nil || svc2 == nil {
-		if svc1 != svc2 {
-			return false, fmt.Errorf("object is nil")
-		} else {
-			return true, nil
-		}
-	}
-
-	if equal, err := objectMetaEqual(svc1.ObjectMeta, svc2.ObjectMeta); !equal {
-		return false, fmt.Errorf("objectMeta not equal: %s", err.Error())
-	}
-
-	if !reflect.DeepEqual(svc1.Spec.Selector, svc2.Spec.Selector) {
-		return false, fmt.Errorf("selector not equal, old: %v, new: %v", svc1.Spec.Selector, svc2.Spec.Selector)
-	}
-
-	return true, nil
 }
 
 func validateRolloutStrategy(rollingUpdate *workloadsv1alpha1.RollingUpdate, replicas int) (*workloadsv1alpha1.RollingUpdate, error) {

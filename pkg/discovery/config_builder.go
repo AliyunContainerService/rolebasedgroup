@@ -2,10 +2,6 @@ package discovery
 
 import (
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/rbgs/pkg/utils"
 	"strings"
 
 	"sigs.k8s.io/yaml"
@@ -98,40 +94,4 @@ func generatePortKey(port corev1.ServicePort) string {
 		return strings.ToLower(strings.ReplaceAll(port.Name, "-", "_"))
 	}
 	return fmt.Sprintf("port%d", port.Port)
-}
-
-func semanticallyEqualConfigmap(old, new *corev1.ConfigMap) (bool, string) {
-	if old == nil && new == nil {
-		return true, ""
-	}
-	if old == nil || new == nil {
-		return false, fmt.Sprintf("nil mismatch: old=%v, new=%v", old, new)
-	}
-	// Defensive copy to prevent side effects
-	oldCopy := old.DeepCopy()
-	newCopy := new.DeepCopy()
-
-	oldCopy.Annotations = utils.FilterSystemAnnotations(oldCopy.Annotations)
-	newCopy.Annotations = utils.FilterSystemAnnotations(newCopy.Annotations)
-
-	objectMetaIgnoreOpts := cmpopts.IgnoreFields(
-		metav1.ObjectMeta{},
-		"ResourceVersion",
-		"UID",
-		"CreationTimestamp",
-		"Generation",
-		"ManagedFields",
-		"SelfLink",
-	)
-
-	opts := cmp.Options{
-		objectMetaIgnoreOpts,
-		cmpopts.SortSlices(func(a, b metav1.OwnerReference) bool {
-			return a.UID < b.UID // Make OwnerReferences comparison order-insensitive
-		}),
-		cmpopts.EquateEmpty(),
-	}
-
-	diff := cmp.Diff(oldCopy, newCopy, opts)
-	return diff == "", diff
 }

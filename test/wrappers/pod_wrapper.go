@@ -5,6 +5,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"sigs.k8s.io/rbgs/test/utils"
 	"time"
 )
 
@@ -12,8 +13,8 @@ type PodWrapper struct {
 	corev1.Pod
 }
 
-func (podWrapper *PodWrapper) Obj() *corev1.Pod {
-	return &podWrapper.Pod
+func (podWrapper *PodWrapper) Obj() corev1.Pod {
+	return podWrapper.Pod
 }
 
 func (podWrapper *PodWrapper) WithName(name string) *PodWrapper {
@@ -57,7 +58,7 @@ func BuildBasicPod() *PodWrapper {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-pod",
 			},
-			Spec: BuildPodSpec().Spec,
+			Spec: BuildPodTemplateSpec().Spec,
 		},
 	}
 }
@@ -71,18 +72,18 @@ func BuildDeletingPod() *PodWrapper {
 				DeletionTimestamp: &metav1.Time{Time: time.Now()},
 				Finalizers:        []string{"kubernetes.io/rolebasedgroup-controller"},
 			},
-			Spec: BuildPodSpec().Spec,
+			Spec: BuildPodTemplateSpec().Spec,
 		},
 	}
 }
 
-func BuildPodSpec() corev1.PodTemplateSpec {
+func BuildPodTemplateSpec() corev1.PodTemplateSpec {
 	return corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
 					Name:  "nginx",
-					Image: "anolis-registry.cn-zhangjiakou.cr.aliyuncs.com/openanolis/nginx:1.14.1-8.6",
+					Image: utils.DefaultImage,
 				},
 			},
 		},

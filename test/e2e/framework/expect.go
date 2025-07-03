@@ -1,46 +1,88 @@
 package framework
 
 import (
-	"context"
 	"github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog/v2"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/rbgs/api/workloads/v1alpha1"
-	"time"
+	"sigs.k8s.io/rbgs/test/utils"
 )
 
-func (f *Framework) ExpectRbgEqual(rbg *v1alpha1.RoleBasedGroup) error {
-
+func (f *Framework) ExpectRbgEqual(rbg *v1alpha1.RoleBasedGroup) {
+	logger := log.FromContext(f.Ctx).WithValues("rbg", rbg.Name)
 	newRbg := &v1alpha1.RoleBasedGroup{}
-	err := wait.PollUntilContextTimeout(f.Ctx, 3*time.Second, 1*time.Minute, false, func(ctx context.Context) (done bool, err error) {
-		err = f.Client.Get(f.Ctx, client.ObjectKey{
+	gomega.Eventually(func() bool {
+		err := f.Client.Get(f.Ctx, client.ObjectKey{
 			Name:      rbg.Name,
 			Namespace: rbg.Namespace,
 		}, newRbg)
-		if len(newRbg.Status.RoleStatuses) == 0 {
-			return false, nil
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				logger.Error(err, "get rbg error")
+			}
+			return false
 		}
-		if len(newRbg.Status.RoleStatuses) != len(newRbg.Spec.Roles) {
-			klog.Infof("role status len %d is not equal with role len %d, wait next time",
-				len(newRbg.Status.RoleStatuses), len(newRbg.Spec.Roles))
-			return false, nil
-		}
-
-		return true, nil
-	})
-
-	gomega.Expect(err).To(gomega.BeNil())
+		return true
+	}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
 
 	// check workload exists
 	for _, role := range rbg.Spec.Roles {
-		wlCheck, err := NewWorkloadEqualChecker(f.Ctx, f.Client, role.Workload.APIVersion, role.Workload.Kind)
-		if err != nil {
-			return err
-		}
-		if err := wlCheck.ExpectWorkloadEqual(rbg, role); err != nil {
-			return err
-		}
+		wlCheck, err := NewWorkloadEqualChecker(f.Ctx, f.Client, role.Workload.String())
+		gomega.Expect(err).To(gomega.BeNil())
+
+		gomega.Eventually(func() bool {
+			return wlCheck.ExpectWorkloadEqual(rbg, role) == nil
+		}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
 	}
-	return nil
+}
+
+func (f *Framework) ExpectRbgDeleted(rbg *v1alpha1.RoleBasedGroup) {
+	newRbg := &v1alpha1.RoleBasedGroup{}
+	gomega.Eventually(func() bool {
+		err := f.Client.Get(f.Ctx, client.ObjectKey{
+			Name:      rbg.Name,
+			Namespace: rbg.Namespace,
+		}, newRbg)
+		if apierrors.IsNotFound(err) {
+			return true
+		}
+
+		return false
+	}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
+}
+
+func (f *Framework) ExpectRbgCondition(rbg *v1alpha1.RoleBasedGroup,
+	conditionType v1alpha1.RoleBasedGroupConditionType, conditionStatus metav1.ConditionStatus) bool {
+	logger := log.FromContext(f.Ctx)
+
+	newRbg := &v1alpha1.RoleBasedGroup{}
+	gomega.Eventually(func() bool {
+		err := f.Client.Get(f.Ctx, client.ObjectKey{
+			Name:      rbg.Name,
+			Namespace: rbg.Namespace,
+		}, newRbg)
+		if err != nil {
+			logger.V(1).Error(err, "get rbg error")
+		}
+		return err == nil
+	}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
+
+	for _, condition := range newRbg.Status.Conditions {
+		if condition.Type == string(conditionType) && condition.Status == conditionStatus {
+			return true
+		}
+
+	}
+	return false
+}
+
+func (f *Framework) ExpectWorkloadLabelContains(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec, labels ...map[string]string) {
+	wlCheck, err := NewWorkloadEqualChecker(f.Ctx, f.Client, role.Workload.String())
+	gomega.Expect(err).To(gomega.BeNil())
+
+	gomega.Eventually(func() bool {
+		return wlCheck.ExpectLabelContains(rbg, role, labels...) == nil
+	}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
 }

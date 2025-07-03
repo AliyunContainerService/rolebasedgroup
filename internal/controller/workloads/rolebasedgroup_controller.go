@@ -121,12 +121,10 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 		roleStatus, updateRoleStatus, err := reconciler.ConstructRoleStatus(ctx, rbg, role)
 		if err != nil {
-			// if workload is creating, skip patch status
-			if apierrors.IsNotFound(err) {
-				continue
+			if !apierrors.IsNotFound(err) {
+				r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,
+					"Failed to construct role %s status: %v", role.Name, err)
 			}
-			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,
-				"Failed to construct role %s status: %v", role.Name, err)
 			return ctrl.Result{}, err
 		}
 		updateStatus = updateStatus || updateRoleStatus
@@ -174,25 +172,31 @@ func (r *RoleBasedGroupReconciler) deleteRoles(ctx context.Context, rbg *workloa
 
 func (r *RoleBasedGroupReconciler) updateRBGStatus(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, roleStatus []workloadsv1alpha1.RoleStatus) error {
 	// update ready condition
-	var readyCondition metav1.Condition
+	rbgReady := true
 	for _, role := range roleStatus {
 		if role.ReadyReplicas != role.Replicas {
-			readyCondition = metav1.Condition{
-				Type:               string(workloadsv1alpha1.RoleBasedGroupReady),
-				Status:             metav1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-				Reason:             "RoleNotReady",
-				Message:            fmt.Sprintf("role %s is not ready", role.Name),
-			}
+			rbgReady = false
+			break
 		}
 	}
 
-	readyCondition = metav1.Condition{
-		Type:               string(workloadsv1alpha1.RoleBasedGroupReady),
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "AllRolesReady",
-		Message:            "All roles are ready",
+	var readyCondition metav1.Condition
+	if rbgReady {
+		readyCondition = metav1.Condition{
+			Type:               string(workloadsv1alpha1.RoleBasedGroupReady),
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "AllRolesReady",
+			Message:            "All roles are ready",
+		}
+	} else {
+		readyCondition = metav1.Condition{
+			Type:               string(workloadsv1alpha1.RoleBasedGroupReady),
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "RoleNotReady",
+			Message:            "Not all role ready",
+		}
 	}
 
 	setCondition(rbg, readyCondition)
@@ -233,9 +237,9 @@ func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager, options co
 		Owns(&corev1.Service{}).
 		Named("workloads-rolebasedgroup")
 
-	err := utils.CheckCrdExists(r.apiReader, "leaderworkerset.x-k8s.io")
+	err := utils.CheckCrdExists(r.apiReader, "leaderworkersets.leaderworkerset.x-k8s.io")
 	if err == nil {
-		controller.Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate()))
+		controller = controller.Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate()))
 	}
 
 	return controller.Complete(r)
@@ -298,9 +302,8 @@ func WorkloadPredicate() predicate.Funcs {
 			return false
 		},
 		UpdateFunc: func(e event.TypedUpdateEvent[client.Object]) bool {
-			ctrl.Log.V(1).Info("enter workload.onUpdateFunc", "name", e.ObjectNew.GetName(),
-				"namespace", e.ObjectNew.GetNamespace(),
-				"type", e.ObjectNew.GetObjectKind().GroupVersionKind().String())
+			ctrl.Log.V(1).Info(fmt.Sprintf("enter workload.onUpdateFunc, %s/%s, type: %T",
+				e.ObjectNew.GetNamespace(), e.ObjectNew.GetName(), e.ObjectNew))
 			// Defensive check for nil objects
 			if e.ObjectOld == nil || e.ObjectNew == nil {
 				return false

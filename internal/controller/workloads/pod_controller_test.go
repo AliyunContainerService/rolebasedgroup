@@ -2,6 +2,7 @@ package workloads
 
 import (
 	"golang.org/x/net/context"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -99,7 +100,7 @@ func TestPodReconciler_podToRBG(t *testing.T) {
 
 	type args struct {
 		ctx  context.Context
-		obj  client.Object
+		obj  corev1.Pod
 		role workloadsv1alpha1.RoleSpec
 	}
 	tests := []struct {
@@ -137,12 +138,12 @@ func TestPodReconciler_podToRBG(t *testing.T) {
 			want: []reconcile.Request{},
 		},
 		{
-			name: "RecreateLWSOnPodRestart",
+			name: "RecreateRoleInstanceOnPodRestart",
 			args: args{
 				ctx: context.TODO(),
 				obj: pod,
 				role: wrappers.BuildBasicRole("test-role").
-					WithRestartPolicy(workloadsv1alpha1.RecreateLWSOnPodRestart).
+					WithRestartPolicy(workloadsv1alpha1.RecreateRoleInstanceOnPodRestart).
 					Obj(),
 			},
 			want: []reconcile.Request{},
@@ -166,13 +167,13 @@ func TestPodReconciler_podToRBG(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rbg := wrappers.BuildBasicRoleBasedGroup("restart-policy", "default").
 				WithRoles([]workloadsv1alpha1.RoleSpec{tt.args.role}).Obj()
-			fclient := fake.NewClientBuilder().WithScheme(schema).WithObjects(tt.args.obj, rbg).Build()
+			fclient := fake.NewClientBuilder().WithScheme(schema).WithObjects(&tt.args.obj, rbg).Build()
 
 			r := &PodReconciler{
 				client: fclient,
 				scheme: schema,
 			}
-			if got := r.podToRBG(tt.args.ctx, tt.args.obj); !reflect.DeepEqual(got, tt.want) {
+			if got := r.podToRBG(tt.args.ctx, &tt.args.obj); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("podToRBG() = %v, want %v", got, tt.want)
 			}
 		})

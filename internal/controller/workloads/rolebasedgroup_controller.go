@@ -19,18 +19,17 @@ package workloads
 import (
 	"context"
 	"fmt"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/util/errors"
 	"reflect"
-	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
-
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sync"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -40,11 +39,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/reconciler"
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
+
+var (
+	runtimeController *builder.TypedBuilder[reconcile.Request]
+	watchedWorkload   sync.Map
+)
+
+func init() {
+	watchedWorkload = sync.Map{}
+}
 
 // RoleBasedGroupReconciler reconciles a RoleBasedGroup object
 type RoleBasedGroupReconciler struct {
@@ -94,6 +104,14 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var roleStatuses []workloadsv1alpha1.RoleStatus
 	var updateStatus bool
 	for _, role := range sortedRoles {
+		// first check whether watch lws cr
+		_, lwsExist := watchedWorkload.Load(reconciler.LwsCrdName)
+		if role.Workload.APIVersion == getLwsGVK().GroupVersion().String() &&
+			role.Workload.Kind == getLwsGVK().Kind && !lwsExist {
+			watchedWorkload.LoadOrStore(reconciler.LwsCrdName, struct{}{})
+			runtimeController.Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate()))
+			logger.Info("rbc controller watch LeaderWorkerSet CRD")
+		}
 		// Check dependencies first
 		ready, err := dependencyManager.CheckDependencyReady(ctx, rbg, role)
 		if err != nil {
@@ -225,7 +243,7 @@ func (r *RoleBasedGroupReconciler) updateRBGStatus(ctx context.Context, rbg *wor
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager, options controller.Options) error {
-	controller := ctrl.NewControllerManagedBy(mgr).
+	runtimeController = ctrl.NewControllerManagedBy(mgr).
 		WithOptions(options).
 		For(&workloadsv1alpha1.RoleBasedGroup{}, builder.WithPredicates(RBGPredicate())).
 		Owns(&appsv1.StatefulSet{}, builder.WithPredicates(WorkloadPredicate())).
@@ -233,12 +251,13 @@ func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager, options co
 		Owns(&corev1.Service{}).
 		Named("workloads-rolebasedgroup")
 
-	err := utils.CheckCrdExists(r.apiReader, "leaderworkerset.x-k8s.io")
+	err := utils.CheckCrdExists(r.apiReader, reconciler.LwsCrdName)
 	if err == nil {
-		controller.Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate()))
+		watchedWorkload.LoadOrStore(reconciler.LwsCrdName, struct{}{})
+		runtimeController.Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate()))
 	}
 
-	return controller.Complete(r)
+	return runtimeController.Complete(r)
 }
 
 // CheckCrdExists checks if the specified Custom Resource Definition (CRD) exists in the Kubernetes cluster.
@@ -353,4 +372,8 @@ func hasValidOwnerRef(obj client.Object, targetGVK schema.GroupVersionKind) bool
 
 func getRbgGVK() schema.GroupVersionKind {
 	return schema.FromAPIVersionAndKind(workloadsv1alpha1.GroupVersion.String(), "RoleBasedGroup")
+}
+
+func getLwsGVK() schema.GroupVersionKind {
+	return schema.FromAPIVersionAndKind(lwsv1.GroupVersion.String(), "LeaderWorkerSet")
 }

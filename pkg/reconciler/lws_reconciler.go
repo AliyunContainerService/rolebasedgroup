@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -12,14 +15,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	utilpointer "k8s.io/utils/pointer"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	lwsapplyv1 "sigs.k8s.io/lws/client-go/applyconfiguration/leaderworkerset/v1"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/utils"
-	"time"
+)
+
+const (
+	LwsCrdName = "leaderworkersets.leaderworkerset.x-k8s.io"
 )
 
 type LeaderWorkerSetReconciler struct {
@@ -101,6 +106,11 @@ func (r *LeaderWorkerSetReconciler) CheckWorkloadReady(ctx context.Context, rbg 
 
 func (r *LeaderWorkerSetReconciler) CleanupOrphanedWorkloads(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup) error {
 	logger := log.FromContext(ctx)
+	err := utils.CheckCrdExists(r.client, LwsCrdName)
+	if err != nil {
+		logger.Info(fmt.Sprintf("LeaderWorkerSetReconciler CleanupOrphanedWorkloads check lws crd failed: %s", err.Error()))
+		return nil
+	}
 	// list lws managed by rbg
 	lwsList := &lwsv1.LeaderWorkerSetList{}
 	if err := r.client.List(ctx, lwsList, client.InNamespace(rbg.Namespace),

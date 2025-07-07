@@ -1,0 +1,32 @@
+name: Build CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    env:
+      GOPATH: ${{ github.workspace }}
+      GO111MODULE: auto
+      CI_TEST_FLAGS: -race -coverprofile=coverage.txt -covermode=atomic
+    defaults:
+      run:
+        working-directory: ${{ env.GOPATH }}/src/github.com/AliyunContainerService/rolebasedgroup
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5.5.0
+      with:
+          go-version: ${{ env.GO_VERSION }}
+          
+    - name: Checkout code
+      uses: actions/checkout@v4.2.2
+      with:
+        path: ${{ env.GOPATH }}/src/github.com/AliyunContainerService/rolebasedgroup
+
+    - name: Run build
+      run: make build

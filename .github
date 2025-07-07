@@ -1,0 +1,96 @@
+name: Project Check
+
+on:
+  push:
+    branches: [ main, release-* ]
+  pull_request:
+    branches: [ main, release-* ]
+
+env:
+  GO_VERSION: 1.23.7
+
+# Declare default permissions as read only.
+permissions: read-all
+
+jobs:
+  staticcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dominikh/staticcheck-action@fe1dd0c3658873b46f8c9bb3291096a617310ca6 # v1
+
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      GOPATH: ${{ github.workspace }}
+      GO111MODULE: auto
+    defaults:
+      run:
+        working-directory: ${{ env.GOPATH }}/src/github.com/AliyunContainerService/rolebasedgroup
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: ${{ env.GOPATH }}/src/github.com/AliyunContainerService/rolebasedgroup
+
+      - name: Lint golang code
+        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+        with:
+          version: latest
+          args: --timeout 10m --verbose
+
+      - name: Lint preparation
+        run: |
+          arch=$(go env GOARCH)
+          os=$(go env GOOS)
+          curl -L https://get.helm.sh/helm-v3.11.1-${os}-${arch}.tar.gz | tar -xz -C /tmp
+          chmod u+x /tmp/${os}-${arch}/helm && sudo mv /tmp/${os}-${arch}/helm /usr/local/bin/helm
+
+      - name: Code fmt check
+        run: |
+          gofmt -l ./pkg ./cmd ./api | grep . && echo "Please run "make fmt" to verify gofmt" && exit 1 || exit 0
+
+      - name: Project lint
+        run: |
+          test -z "$(go fmt ./... 2>/dev/null | tee /dev/stderr)" || (echo "please format Go code with 'gofmt'")
+          go vet ./...
+          find ./charts | grep Chart.yaml | xargs dirname | xargs helm lint
+
+  build:
+    env:
+      GOPATH: ${{ github.workspace }}
+      GO111MODULE: auto
+      CI_TEST_FLAGS: -race -coverprofile=coverage.txt -covermode=atomic
+    defaults:
+      run:
+        working-directory: ${{ env.GOPATH }}/src/github.com/AliyunContainerService/rolebasedgroup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: ${{ env.GOPATH }}/src/github.com/AliyunContainerService/rolebasedgroup
+
+      - name: CI Preparation
+        run: |
+          arch=$(go env GOARCH)
+          os=$(go env GOOS)
+          curl -L https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.1/kubebuilder_2.3.1_${os}_${arch}.tar.gz | tar -xz -C /tmp/
+          sudo mv /tmp/kubebuilder_2.3.1_${os}_${arch} /usr/local/kubebuilder
+          export PATH=$PATH:/usr/local/kubebuilder/bin
+
+      - name: CI script
+        run: |
+          make build
+          make test
+          bash <(curl -s https://codecov.io/bash)

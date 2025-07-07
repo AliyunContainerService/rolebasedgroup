@@ -35,35 +35,37 @@ func NewLeaderWorkerSetReconciler(scheme *runtime.Scheme, client client.Client) 
 
 func (r *LeaderWorkerSetReconciler) Reconciler(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
 	logger := log.FromContext(ctx)
-	logger.V(1).Info("start to reconciling lws workload", "rbg", keyOfRbg(rbg))
+	logger.V(1).Info("start to reconciling lws workload")
+
 	lwsApplyConfig, err := r.constructLWSApplyConfiguration(ctx, rbg, role)
 	if err != nil {
 		return err
 	}
 	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(lwsApplyConfig)
 	if err != nil {
-		logger.Error(err, "Converting obj apply configuration to json", "rbg", keyOfRbg(rbg))
+		logger.Error(err, "Converting obj apply configuration to json")
 		return err
 	}
 	newLWS := &lwsv1.LeaderWorkerSet{}
 	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj, newLWS); err != nil {
-		logger.Error(err, "convert lwsApplyConfig to lws", "rbg", keyOfRbg(rbg))
+		logger.Error(err, "convert lwsApplyConfig to lws")
 		return err
 	}
 	oldLWS := &lwsv1.LeaderWorkerSet{}
 	err = r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldLWS)
 	if err != nil && !apierrors.IsNotFound(err) {
-		logger.Error(err, "get lws failed", "rbg", keyOfRbg(rbg))
+		logger.Error(err, "get lws failed")
 		return err
 	}
 	equal, err := semanticallyEqualLeaderWorkerSet(oldLWS, newLWS)
 	if equal {
-		logger.V(1).Info("lws workload equal", "rbg", keyOfRbg(rbg))
+		logger.V(1).Info("lws workload equal, skip reconcile")
 		return nil
 	}
-	logger.Info(fmt.Sprintf("lws not equal, diff: %s", err.Error()), "rbg", keyOfRbg(rbg))
+	logger.V(1).Info(fmt.Sprintf("lws not equal, diff: %s", err.Error()))
+
 	if err = utils.PatchObjectApplyConfiguration(ctx, r.client, lwsApplyConfig, utils.PatchSpec); err != nil {
-		logger.Error(err, "Failed to patch lws apply configuration", "rbg", keyOfRbg(rbg))
+		logger.Error(err, "Failed to patch lws apply configuration")
 		return err
 	}
 	return nil

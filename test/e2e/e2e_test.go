@@ -17,21 +17,20 @@ limitations under the License.
 package e2e
 
 import (
-	"fmt"
+	"sigs.k8s.io/rbgs/test/e2e/testcase"
 	"testing"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"sigs.k8s.io/rbgs/test/e2e/framework"
-	"sigs.k8s.io/rbgs/test/e2e/testcase/rbg"
 )
 
 func TestE2E(t *testing.T) {
-	fmt.Println("TestE2E")
-	f := framework.NewFramework()
+	gomega.RegisterFailHandler(ginkgo.Fail)
+
+	f := framework.NewFramework(true)
 	ginkgo.BeforeSuite(func() {
-		err := f.BeforeAll()
-		gomega.Expect(err).To(gomega.BeNil())
+		f.BeforeAll()
 	})
 
 	ginkgo.AfterSuite(func() {
@@ -42,11 +41,11 @@ func TestE2E(t *testing.T) {
 		f.AfterEach()
 	})
 
-	gomega.RegisterFailHandler(ginkgo.Fail)
-
 	ginkgo.Describe("Run role based controller e2e tests", func() {
-		rbg.RunRbgControllerTestCases(f)
-		rbg.RunLwsRbgTestCases(f)
+		testcase.RunRbgControllerTestCases(f)
+		testcase.RunDeploymentWorkloadTestCases(f)
+		testcase.RunStatefulSetWorkloadTestCases(f)
+		testcase.RunLeaderWorkerSetWorkloadTestCases(f)
 	})
 
 	ginkgo.RunSpecs(t, "run rbg e2e test")

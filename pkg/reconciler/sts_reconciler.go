@@ -240,6 +240,15 @@ func (r *StatefulSetReconciler) getReplicaStates(ctx context.Context, sts *appsv
 		sortedPods[idx] = podList.Items[i]
 	}
 
+	highestRevision, err := r.getHighestRevision(ctx, sts)
+	if err != nil {
+		logger.Error(fmt.Errorf("get sts highest controller revision error"), "sts", sts.Name)
+		return nil, err
+	}
+	if highestRevision == nil {
+		return nil, fmt.Errorf("sts %s has no revision", sts.Name)
+	}
+
 	for idx := int32(0); idx < *sts.Spec.Replicas; idx++ {
 		nominatedName := fmt.Sprintf("%s-%d", sts.Name, idx)
 		// It can happen that the leader pod or the worker statefulset hasn't created yet
@@ -252,11 +261,6 @@ func (r *StatefulSetReconciler) getReplicaStates(ctx context.Context, sts *appsv
 			continue
 		}
 
-		highestRevision, err := r.getHighestRevision(ctx, sts)
-		if err != nil {
-			logger.Error(fmt.Errorf("get sts highest controller revision error"), "sts", sts.Name)
-			return nil, err
-		}
 		podReady := utils.PodRunningAndReady(sortedPods[idx])
 		states[idx] = replicaState{
 			ready:   podReady,

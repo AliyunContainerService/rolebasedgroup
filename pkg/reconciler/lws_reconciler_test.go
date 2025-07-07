@@ -312,6 +312,26 @@ func TestPatchPodTemplate(t *testing.T) {
 				return obj
 			},
 		},
+		{
+			name: "test3, only patch labels & annotations",
+			getTemplate: func() corev1.PodTemplateSpec {
+				obj := defaultPodTemplate.DeepCopy()
+				return *obj
+			},
+			getPatch: func() runtime.RawExtension {
+				patchContent := `{"metadata":{"labels":{"app":"nginx"},"annotations":{"test":"annotation"}}}`
+
+				return runtime.RawExtension{
+					Raw: []byte(patchContent),
+				}
+			},
+			expect: func() corev1.PodTemplateSpec {
+				obj := defaultPodTemplate.DeepCopy()
+				obj.Labels = map[string]string{"app": "nginx"}
+				obj.Annotations = map[string]string{"test": "annotation"}
+				return *obj
+			},
+		},
 	}
 
 	for _, cs := range cases {

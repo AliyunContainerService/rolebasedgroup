@@ -67,16 +67,8 @@ test: manifests generate fmt vet ## Run tests.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
 .PHONY: test-e2e
-test-e2e: manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	@command -v kind >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
-		exit 1; \
-	}
-	@kind get clusters | grep -q 'kind' || { \
-		echo "No Kind cluster is running. Please start a Kind cluster before running the e2e tests."; \
-		exit 1; \
-	}
-	go test ./test/e2e/ -v -ginkgo.v
+test-e2e: manifests generate fmt vet ## Run the e2e tests.
+	go test ./test/e2e/ -v -ginkgo.v --ginkgo.fail-fast
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

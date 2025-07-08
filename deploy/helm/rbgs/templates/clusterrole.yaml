@@ -4,6 +4,14 @@ metadata:
   name: rbgs-controller-role
 rules:
   - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
       - workloads.x-k8s.io
     resources:
       - rolebasedgroupsets
@@ -16,15 +24,15 @@ rules:
       - update
       - patch
   - apiGroups:
-      - "apiextensions.k8s.io"
+      - apiextensions.k8s.io
     resources:
-      - "customresourcedefinitions"
+      - customresourcedefinitions
     verbs:
-      - "get"
+      - get
     resourceNames:
-      - "rolebasedgroupsets.workloads.x-k8s.io"
-      - "rolebasedgroups.workloads.x-k8s.io"
-      - "clusterengineruntimeprofiles.workloads.x-k8s.io"
+      - rolebasedgroupsets.workloads.x-k8s.io
+      - rolebasedgroups.workloads.x-k8s.io
+      - clusterengineruntimeprofiles.workloads.x-k8s.io
   - apiGroups:
       - workloads.x-k8s.io
     resources:

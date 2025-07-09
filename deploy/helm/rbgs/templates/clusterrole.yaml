@@ -115,6 +115,7 @@ rules:
     resources:
       - statefulsets
       - deployments
+      - controllerrevisions
     verbs:
       - create
       - delete

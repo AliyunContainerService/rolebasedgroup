@@ -1396,7 +1396,7 @@ spec:
                       enum:
                       - None
                       - RecreateRBGOnPodRestart
-                      - RecreateLWSOnPodRestart
+                      - RecreateRoleInstanceOnPodRestart
                       type: string
                     rolloutStrategy:
                       description: |-

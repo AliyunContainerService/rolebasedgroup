@@ -104,10 +104,13 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var roleStatuses []workloadsv1alpha1.RoleStatus
 	var updateStatus bool
 	for _, role := range sortedRoles {
+		logger := log.FromContext(ctx)
+		roleCtx := log.IntoContext(ctx, logger.WithValues("role", role.Name))
+
 		// first check whether watch lws cr
-		dynamicWatchCustomCRD(ctx, role.Workload)
+		dynamicWatchCustomCRD(roleCtx, role.Workload)
 		// Check dependencies first
-		ready, err := dependencyManager.CheckDependencyReady(ctx, rbg, role)
+		ready, err := dependencyManager.CheckDependencyReady(roleCtx, rbg, role)
 		if err != nil {
 			r.recorder.Event(rbg, corev1.EventTypeWarning, FailedCheckRoleDependency, err.Error())
 			return ctrl.Result{}, err
@@ -125,13 +128,13 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 
-		if err := reconciler.Reconciler(ctx, rbg, role); err != nil {
+		if err := reconciler.Reconciler(roleCtx, rbg, role); err != nil {
 			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,
 				"Failed to reconcile role %s: %v", role.Name, err)
 			return ctrl.Result{}, err
 		}
 
-		roleStatus, updateRoleStatus, err := reconciler.ConstructRoleStatus(ctx, rbg, role)
+		roleStatus, updateRoleStatus, err := reconciler.ConstructRoleStatus(roleCtx, rbg, role)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
 				r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,

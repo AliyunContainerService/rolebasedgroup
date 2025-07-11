@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +36,10 @@ func (g *EnvBuilder) Build() []corev1.EnvVar {
 	for _, env := range envMap {
 		envVars = append(envVars, env)
 	}
+
+	sort.Slice(envVars, func(i, j int) bool {
+		return envVars[i].Name < envVars[j].Name
+	})
 	return envVars
 }
 

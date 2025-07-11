@@ -98,7 +98,7 @@ type RoleSpec struct {
 
 	// RestartPolicy defines the restart policy when pod failures happen.
 	// +kubebuilder:default=None
-	// +kubebuilder:validation:Enum={None,RecreateRBGOnPodRestart,RecreateLWSOnPodRestart}
+	// +kubebuilder:validation:Enum={None,RecreateRBGOnPodRestart,RecreateRoleInstanceOnPodRestart}
 	// +optional
 	RestartPolicy RestartPolicyType `json:"restartPolicy,omitempty"`
 

@@ -183,7 +183,7 @@ func (r *PodReconciler) podToRBG(ctx context.Context, obj client.Object) []recon
 	}
 
 	// 1. if RestartPolicy is None, do nothing
-	// 2. if RestartPolicy is RecreateLWSOnPodRestart, the lws controller will recreate lws. RBG controller does nothing.
+	// 2. if RestartPolicy is RecreateRoleInstanceOnPodRestart, the lws controller will recreate lws. RBG controller does nothing.
 	if curRole.RestartPolicy == "" || curRole.RestartPolicy != workloadsv1alpha1.RecreateRBGOnPodRestart {
 		return []reconcile.Request{}
 	}

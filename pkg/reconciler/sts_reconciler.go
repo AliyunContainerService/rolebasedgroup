@@ -56,7 +56,13 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 	}
 	role.RolloutStrategy.RollingUpdate = rollingUpdate
 
-	stsApplyConfig, err := r.constructStatefulSetApplyConfiguration(ctx, rbg, role)
+	oldSts := &appsv1.StatefulSet{}
+	err = r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldSts)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	stsApplyConfig, err := r.constructStatefulSetApplyConfiguration(ctx, rbg, role, oldSts)
 	if err != nil {
 		logger.Error(err, "Failed to construct statefulset apply configuration")
 		return err
@@ -70,12 +76,6 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 	newSts := &appsv1.StatefulSet{}
 	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj, newSts); err != nil {
 		return fmt.Errorf("convert stsApplyConfig to sts error: %s", err.Error())
-	}
-
-	oldSts := &appsv1.StatefulSet{}
-	err = r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldSts)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return err
 	}
 
 	equal, err := SemanticallyEqualStatefulSet(oldSts, newSts)
@@ -369,13 +369,19 @@ func (r *StatefulSetReconciler) constructStatefulSetApplyConfiguration(
 	ctx context.Context,
 	rbg *workloadsv1alpha1.RoleBasedGroup,
 	role *workloadsv1alpha1.RoleSpec,
+	oldSts *appsv1.StatefulSet,
 ) (*appsapplyv1.StatefulSetApplyConfiguration, error) {
+	matchLabels := rbg.GetCommonLabelsFromRole(role)
+	if oldSts.UID != "" {
+		matchLabels = oldSts.Spec.Selector.MatchLabels
+	}
 
 	podReconciler := NewPodReconciler(r.scheme, r.client)
 	podTemplateApplyConfiguration, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role)
 	if err != nil {
 		return nil, err
 	}
+	podTemplateApplyConfiguration.WithLabels(matchLabels)
 
 	// construct statefulset apply configuration
 	statefulSetConfig := appsapplyv1.StatefulSet(rbg.GetWorkloadName(role), rbg.Namespace).
@@ -385,9 +391,9 @@ func (r *StatefulSetReconciler) constructStatefulSetApplyConfiguration(
 			WithTemplate(podTemplateApplyConfiguration).
 			WithPodManagementPolicy(appsv1.ParallelPodManagement).
 			WithSelector(metaapplyv1.LabelSelector().
-				WithMatchLabels(rbg.GetCommonLabelsFromRole(role)))).
+				WithMatchLabels(matchLabels))).
 		WithAnnotations(rbg.GetCommonAnnotationsFromRole(role)).
-		WithLabels(rbg.GetCommonLabelsFromRole(role)).
+		WithLabels(matchLabels).
 		WithOwnerReferences(metaapplyv1.OwnerReference().
 			WithAPIVersion(rbg.APIVersion).
 			WithKind(rbg.Kind).

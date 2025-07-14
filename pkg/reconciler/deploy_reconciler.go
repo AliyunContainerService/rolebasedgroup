@@ -35,7 +35,13 @@ func (r *DeploymentReconciler) Reconciler(ctx context.Context, rbg *workloadsv1a
 	logger := log.FromContext(ctx)
 	logger.V(1).Info("start to reconciling deploy workload")
 
-	deployApplyConfig, err := r.constructDeployApplyConfiguration(ctx, rbg, role)
+	oldDeploy := &appsv1.Deployment{}
+	err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldDeploy)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	deployApplyConfig, err := r.constructDeployApplyConfiguration(ctx, rbg, role, oldDeploy)
 	if err != nil {
 		logger.Error(err, "Failed to construct deploy apply configuration")
 		return err
@@ -48,12 +54,6 @@ func (r *DeploymentReconciler) Reconciler(ctx context.Context, rbg *workloadsv1a
 	newDeploy := &appsv1.Deployment{}
 	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj, newDeploy); err != nil {
 		return fmt.Errorf("convert deployApplyConfig to deploy error: %s", err.Error())
-	}
-
-	oldDeploy := &appsv1.Deployment{}
-	err = r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldDeploy)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return err
 	}
 
 	equal, err := SemanticallyEqualDeployment(oldDeploy, newDeploy)
@@ -75,12 +75,19 @@ func (r *DeploymentReconciler) constructDeployApplyConfiguration(
 	ctx context.Context,
 	rbg *workloadsv1alpha1.RoleBasedGroup,
 	role *workloadsv1alpha1.RoleSpec,
+	oldDeploy *appsv1.Deployment,
 ) (*appsapplyv1.DeploymentApplyConfiguration, error) {
+	matchLabels := rbg.GetCommonLabelsFromRole(role)
+	if oldDeploy.UID != "" {
+		matchLabels = oldDeploy.Spec.Selector.MatchLabels
+	}
+
 	podReconciler := NewPodReconciler(r.scheme, r.client)
 	podTemplateApplyConfiguration, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role)
 	if err != nil {
 		return nil, err
 	}
+	podTemplateApplyConfiguration.WithLabels(matchLabels)
 
 	// construct deployment apply configuration
 	deployConfig := appsapplyv1.Deployment(rbg.GetWorkloadName(role), rbg.Namespace).
@@ -88,9 +95,9 @@ func (r *DeploymentReconciler) constructDeployApplyConfiguration(
 			WithReplicas(*role.Replicas).
 			WithTemplate(podTemplateApplyConfiguration).
 			WithSelector(metaapplyv1.LabelSelector().
-				WithMatchLabels(rbg.GetCommonLabelsFromRole(role)))).
+				WithMatchLabels(matchLabels))).
 		WithAnnotations(rbg.GetCommonAnnotationsFromRole(role)).
-		WithLabels(rbg.GetCommonLabelsFromRole(role)).
+		WithLabels(matchLabels).
 		WithOwnerReferences(metaapplyv1.OwnerReference().
 			WithAPIVersion(rbg.APIVersion).
 			WithKind(rbg.Kind).

@@ -78,7 +78,6 @@ func (r *PodReconciler) ConstructPodTemplateSpecApplyConfiguration(
 	if err != nil {
 		return nil, err
 	}
-	podTemplateApplyConfiguration.WithLabels(rbg.GetCommonLabelsFromRole(role))
 
 	return podTemplateApplyConfiguration, nil
 }
@@ -96,13 +95,15 @@ func podTemplateSpecEqual(template1, template2 corev1.PodTemplateSpec) (bool, er
 }
 
 func objectMetaEqual(meta1, meta2 metav1.ObjectMeta) (bool, error) {
-	if !reflect.DeepEqual(meta1.Labels, meta2.Labels) {
+	meta1.Labels = utils.FilterSystemLabels(meta1.Labels)
+	meta2.Labels = utils.FilterSystemLabels(meta2.Labels)
+	if !mapsEqual(meta1.Labels, meta2.Labels) {
 		return false, fmt.Errorf("label not equal, old [%s], new [%s]", meta1.Labels, meta2.Labels)
 	}
 
 	meta1.Annotations = utils.FilterSystemAnnotations(meta1.Annotations)
 	meta2.Annotations = utils.FilterSystemAnnotations(meta2.Annotations)
-	if !reflect.DeepEqual(meta1.Annotations, meta2.Annotations) {
+	if !mapsEqual(meta1.Annotations, meta2.Annotations) {
 		return false, fmt.Errorf("annotation not equal, old [%s], new [%s]", meta1.Annotations, meta2.Annotations)
 	}
 	return true, nil
@@ -178,6 +179,8 @@ func containerEqual(c1, c2 corev1.Container) (bool, error) {
 
 // envVarsEqual 比较环境变量
 func envVarsEqual(env1, env2 []corev1.EnvVar) (bool, error) {
+	env1 = utils.FilterSystemEnvs(env1)
+	env2 = utils.FilterSystemEnvs(env2)
 	if len(env1) != len(env2) {
 		return false, fmt.Errorf("env vars len not equal")
 	}
@@ -272,4 +275,32 @@ func sortContainers(containers []corev1.Container) []corev1.Container {
 		return sorted[i].Name < sorted[j].Name
 	})
 	return sorted
+}
+
+// mapsEqual compares two map[string]string.
+// It returns true if both maps are nil or empty.
+// Otherwise, it compares keys and values for equality.
+func mapsEqual(map1, map2 map[string]string) bool {
+	isMap1Empty := map1 == nil || len(map1) == 0
+	isMap2Empty := map2 == nil || len(map2) == 0
+
+	if isMap1Empty && isMap2Empty {
+		return true
+	}
+
+	if isMap1Empty != isMap2Empty {
+		return false
+	}
+
+	if len(map1) != len(map2) {
+		return false
+	}
+
+	for k, v := range map1 {
+		if val2, ok := map2[k]; !ok || val2 != v {
+			return false
+		}
+	}
+
+	return true
 }

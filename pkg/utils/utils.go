@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -94,10 +95,37 @@ func FilterSystemAnnotations(annotations map[string]string) map[string]string {
 
 	filtered := make(map[string]string)
 	for k, v := range annotations {
-		// 忽略 kubernetes.io/ 开头的系统注解
 		if !strings.HasPrefix(k, "deployment.kubernetes.io/revision") &&
+			!strings.HasPrefix(k, "rolebasedgroup.workloads.x-k8s.io/") &&
+			!strings.HasPrefix(k, "app.kubernetes.io/") {
+			filtered[k] = v
+		}
+	}
+	return filtered
+}
+
+func FilterSystemLabels(labels map[string]string) map[string]string {
+	if labels == nil {
+		return nil
+	}
+
+	filtered := make(map[string]string)
+	for k, v := range labels {
+
+		if !strings.HasPrefix(k, "app.kubernetes.io/") &&
 			!strings.HasPrefix(k, "rolebasedgroup.workloads.x-k8s.io/") {
 			filtered[k] = v
+		}
+	}
+	return filtered
+
+}
+
+func FilterSystemEnvs(envs []corev1.EnvVar) []corev1.EnvVar {
+	var filtered []corev1.EnvVar
+	for _, env := range envs {
+		if !strings.HasPrefix(env.Name, "ROLES_") && env.Name != "RBG_GROUP_SIZE" {
+			filtered = append(filtered, env)
 		}
 	}
 	return filtered

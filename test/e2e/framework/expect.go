@@ -33,7 +33,11 @@ func (f *Framework) ExpectRbgEqual(rbg *v1alpha1.RoleBasedGroup) {
 		gomega.Expect(err).To(gomega.BeNil())
 
 		gomega.Eventually(func() bool {
-			return wlCheck.ExpectWorkloadEqual(rbg, role) == nil
+			err := wlCheck.ExpectWorkloadEqual(rbg, role)
+			if err != nil {
+				logger.V(1).Info("workload not equal, wait next time", "reason", err.Error())
+			}
+			return err == nil
 		}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
 	}
 }

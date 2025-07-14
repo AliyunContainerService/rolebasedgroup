@@ -115,7 +115,7 @@ func BuildBasicRole(name string) *RoleWrapper {
 				APIVersion: "apps/v1",
 				Kind:       "StatefulSet",
 			},
-			Template: BuildPodTemplateSpec(),
+			Template: BuildBasicPodTemplateSpec().Obj(),
 		},
 	}
 }
@@ -135,7 +135,7 @@ func BuildLwsRole(name string) *RoleWrapper {
 				APIVersion: "leaderworkerset.x-k8s.io/v1",
 				Kind:       "LeaderWorkerSet",
 			},
-			Template: BuildPodTemplateSpec(),
+			Template: BuildBasicPodTemplateSpec().Obj(),
 			LeaderWorkerSet: workloadsv1alpha.LeaderWorkerTemplate{
 				PatchLeaderTemplate: leaderPatch,
 				PatchWorkerTemplate: workerPatch,

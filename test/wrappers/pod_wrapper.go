@@ -58,7 +58,14 @@ func BuildBasicPod() *PodWrapper {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-pod",
 			},
-			Spec: BuildPodTemplateSpec().Spec,
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "nginx",
+						Image: utils.DefaultImage,
+					},
+				},
+			},
 		},
 	}
 }
@@ -72,18 +79,48 @@ func BuildDeletingPod() *PodWrapper {
 				DeletionTimestamp: &metav1.Time{Time: time.Now()},
 				Finalizers:        []string{"kubernetes.io/rolebasedgroup-controller"},
 			},
-			Spec: BuildPodTemplateSpec().Spec,
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "nginx",
+						Image: utils.DefaultImage,
+					},
+				},
+			},
 		},
 	}
 }
 
-func BuildPodTemplateSpec() corev1.PodTemplateSpec {
-	return corev1.PodTemplateSpec{
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:  "nginx",
-					Image: utils.DefaultImage,
+type PodTemplateSpecWrapper struct {
+	corev1.PodTemplateSpec
+}
+
+func (podTemplateWrapper *PodTemplateSpecWrapper) Obj() corev1.PodTemplateSpec {
+	return podTemplateWrapper.PodTemplateSpec
+}
+
+func (podTemplateWrapper *PodTemplateSpecWrapper) WithContainers(containers []corev1.Container) *PodTemplateSpecWrapper {
+	podTemplateWrapper.Spec.Containers = containers
+	return podTemplateWrapper
+}
+
+func (podTemplateWrapper *PodTemplateSpecWrapper) WithResources(resources corev1.ResourceRequirements, containerIndex int) *PodTemplateSpecWrapper {
+	if containerIndex < 0 || containerIndex > len(podTemplateWrapper.Spec.Containers)-1 {
+		containerIndex = 0
+	}
+	podTemplateWrapper.Spec.Containers[containerIndex].Resources = resources
+	return podTemplateWrapper
+}
+
+func BuildBasicPodTemplateSpec() *PodTemplateSpecWrapper {
+	return &PodTemplateSpecWrapper{
+		corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "nginx",
+						Image: utils.DefaultImage,
+					},
 				},
 			},
 		},

@@ -3,6 +3,7 @@ package reconciler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
@@ -63,12 +64,13 @@ func (r *LeaderWorkerSetReconciler) Reconciler(ctx context.Context, rbg *workloa
 		logger.Error(err, "get lws failed")
 		return err
 	}
+
 	equal, err := semanticallyEqualLeaderWorkerSet(oldLWS, newLWS)
 	if equal {
-		logger.V(1).Info("lws workload equal, skip reconcile")
+		logger.Info("lws equal, skip reconcile")
 		return nil
 	}
-	logger.V(1).Info(fmt.Sprintf("lws not equal, diff: %s", err.Error()))
+	logger.Info(fmt.Sprintf("lws not equal, diff: %s", err.Error()))
 
 	if err = utils.PatchObjectApplyConfiguration(ctx, r.client, lwsApplyConfig, utils.PatchSpec); err != nil {
 		logger.Error(err, "Failed to patch lws apply configuration")
@@ -157,7 +159,7 @@ func (r *LeaderWorkerSetReconciler) constructLWSApplyConfiguration(ctx context.C
 		logger.Error(err, "patch leader podTemplate failed", "rbg", keyOfRbg(rbg))
 		return nil, err
 	}
-	leaderTemplateApplyCfg, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role, leaderTemp)
+	leaderTemplateApplyCfg, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role, rbg.GetCommonLabelsFromRole(role), leaderTemp)
 	if err != nil {
 		logger.Error(err, "patch Construct PodTemplateSpecApplyConfiguration failed", "rbg", keyOfRbg(rbg))
 		return nil, err
@@ -172,7 +174,7 @@ func (r *LeaderWorkerSetReconciler) constructLWSApplyConfiguration(ctx context.C
 	workerPodReconciler := NewPodReconciler(r.scheme, r.client)
 	// workerTemplate do not need to inject sidecar
 	workerPodReconciler.SetInjectors([]string{"config", "env"})
-	workerTemplateApplyCfg, err := workerPodReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role, workerTemp)
+	workerTemplateApplyCfg, err := workerPodReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role, rbg.GetCommonLabelsFromRole(role), workerTemp)
 	if err != nil {
 		logger.Error(err, "patch Construct PodTemplateSpecApplyConfiguration failed", "rbg", keyOfRbg(rbg))
 		return nil, err
@@ -273,20 +275,19 @@ func (r *LeaderWorkerSetReconciler) RecreateWorkload(ctx context.Context, rbg *w
 	return nil
 }
 
-func semanticallyEqualLeaderWorkerSet(lws1, lws2 *lwsv1.LeaderWorkerSet) (bool, error) {
-	if lws1 == nil || lws2 == nil {
-		if lws1 != lws2 {
-			return false, fmt.Errorf("object is nil")
-		} else {
-			return true, nil
-		}
+func semanticallyEqualLeaderWorkerSet(oldLws, newLws *lwsv1.LeaderWorkerSet) (bool, error) {
+	if oldLws == nil || oldLws.UID == "" {
+		return false, errors.New("old lws not exist")
+	}
+	if newLws == nil {
+		return false, fmt.Errorf("new lws is nil")
 	}
 
-	if equal, err := objectMetaEqual(lws1.ObjectMeta, lws2.ObjectMeta); !equal {
+	if equal, err := objectMetaEqual(oldLws.ObjectMeta, newLws.ObjectMeta); !equal {
 		return false, fmt.Errorf("objectMeta not equal: %s", err.Error())
 	}
 
-	if equal, err := lwsSpecEqual(lws1.Spec, lws2.Spec); !equal {
+	if equal, err := lwsSpecEqual(oldLws.Spec, newLws.Spec); !equal {
 		return false, fmt.Errorf("spec not equal: %s", err.Error())
 	}
 

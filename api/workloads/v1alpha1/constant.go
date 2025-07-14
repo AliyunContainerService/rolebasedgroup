@@ -13,6 +13,10 @@ const (
 	// Value: RoleSpec.name from RoleBasedGroup.spec.roles[]
 	SetRoleLabelKey = RBGDomainPrefix + "role"
 
+	// PodGroupLabelKey identifies pods belonging to a specific pod group
+	// Value: RoleBasedName
+	PodGroupLabelKey = "pod-group.scheduling.sigs.k8s.io/name"
+
 	// RevisionAnnotationKey tracks the controller revision hash for template changes
 	// Value: SHA256 hash of RoleSpec template
 	RevisionAnnotationKey = RBGDomainPrefix + "revision"

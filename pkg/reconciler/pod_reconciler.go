@@ -37,6 +37,7 @@ func (r *PodReconciler) ConstructPodTemplateSpecApplyConfiguration(
 	ctx context.Context,
 	rbg *workloadsv1alpha1.RoleBasedGroup,
 	role *workloadsv1alpha1.RoleSpec,
+	podLabels map[string]string,
 	podTmpls ...corev1.PodTemplateSpec,
 ) (*coreapplyv1.PodTemplateSpecApplyConfiguration, error) {
 	var podTemplateSpec corev1.PodTemplateSpec
@@ -79,6 +80,14 @@ func (r *PodReconciler) ConstructPodTemplateSpecApplyConfiguration(
 		return nil, err
 	}
 
+	if rbg.EnableGangScheduling() {
+		if podLabels == nil {
+			podLabels = map[string]string{}
+		}
+		podLabels[workloadsv1alpha1.PodGroupLabelKey] = rbg.Name
+	}
+	podTemplateApplyConfiguration.WithLabels(podLabels)
+
 	return podTemplateApplyConfiguration, nil
 }
 
@@ -95,16 +104,19 @@ func podTemplateSpecEqual(template1, template2 corev1.PodTemplateSpec) (bool, er
 }
 
 func objectMetaEqual(meta1, meta2 metav1.ObjectMeta) (bool, error) {
-	meta1.Labels = utils.FilterSystemLabels(meta1.Labels)
-	meta2.Labels = utils.FilterSystemLabels(meta2.Labels)
-	if !mapsEqual(meta1.Labels, meta2.Labels) {
-		return false, fmt.Errorf("label not equal, old [%s], new [%s]", meta1.Labels, meta2.Labels)
+	meta1Copy := meta1.DeepCopy()
+	meta2Copy := meta2.DeepCopy()
+
+	meta1Copy.Labels = utils.FilterSystemLabels(meta1Copy.Labels)
+	meta2Copy.Labels = utils.FilterSystemLabels(meta2Copy.Labels)
+	if !mapsEqual(meta1Copy.Labels, meta2Copy.Labels) {
+		return false, fmt.Errorf("label not equal, old [%s], new [%s]", meta1Copy.Labels, meta2Copy.Labels)
 	}
 
-	meta1.Annotations = utils.FilterSystemAnnotations(meta1.Annotations)
-	meta2.Annotations = utils.FilterSystemAnnotations(meta2.Annotations)
-	if !mapsEqual(meta1.Annotations, meta2.Annotations) {
-		return false, fmt.Errorf("annotation not equal, old [%s], new [%s]", meta1.Annotations, meta2.Annotations)
+	meta1Copy.Annotations = utils.FilterSystemAnnotations(meta1Copy.Annotations)
+	meta2Copy.Annotations = utils.FilterSystemAnnotations(meta2Copy.Annotations)
+	if !mapsEqual(meta1Copy.Annotations, meta2Copy.Annotations) {
+		return false, fmt.Errorf("annotation not equal, old [%s], new [%s]", meta1Copy.Annotations, meta2Copy.Annotations)
 	}
 	return true, nil
 }

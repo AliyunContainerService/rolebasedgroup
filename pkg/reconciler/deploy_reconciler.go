@@ -2,9 +2,11 @@ package reconciler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"maps"
 	"reflect"
 	"time"
 
@@ -33,7 +35,7 @@ func NewDeploymentReconciler(scheme *runtime.Scheme, client client.Client) *Depl
 
 func (r *DeploymentReconciler) Reconciler(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
 	logger := log.FromContext(ctx)
-	logger.V(1).Info("start to reconciling deploy workload")
+	logger.V(1).Info("start to reconciling deployment workload")
 
 	oldDeploy := &appsv1.Deployment{}
 	err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldDeploy)
@@ -43,7 +45,7 @@ func (r *DeploymentReconciler) Reconciler(ctx context.Context, rbg *workloadsv1a
 
 	deployApplyConfig, err := r.constructDeployApplyConfiguration(ctx, rbg, role, oldDeploy)
 	if err != nil {
-		logger.Error(err, "Failed to construct deploy apply configuration")
+		logger.Error(err, "Failed to construct deployment apply configuration")
 		return err
 	}
 	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(deployApplyConfig)
@@ -53,19 +55,19 @@ func (r *DeploymentReconciler) Reconciler(ctx context.Context, rbg *workloadsv1a
 	}
 	newDeploy := &appsv1.Deployment{}
 	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj, newDeploy); err != nil {
-		return fmt.Errorf("convert deployApplyConfig to deploy error: %s", err.Error())
+		return fmt.Errorf("convert deployApplyConfig to deployment error: %s", err.Error())
 	}
 
 	equal, err := SemanticallyEqualDeployment(oldDeploy, newDeploy)
 	if equal {
-		logger.V(1).Info("deploy equal, skip reconcile")
+		logger.Info("deployment equal, skip reconcile")
 		return nil
 	}
 
-	logger.V(1).Info(fmt.Sprintf("deploy not equal, diff: %s", err.Error()))
+	logger.Info(fmt.Sprintf("deployment not equal, diff: %s", err.Error()))
 
 	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, deployApplyConfig, utils.PatchSpec); err != nil {
-		logger.Error(err, "Failed to patch deploy apply configuration")
+		logger.Error(err, "Failed to patch deployment apply configuration")
 		return err
 	}
 	return nil
@@ -79,15 +81,15 @@ func (r *DeploymentReconciler) constructDeployApplyConfiguration(
 ) (*appsapplyv1.DeploymentApplyConfiguration, error) {
 	matchLabels := rbg.GetCommonLabelsFromRole(role)
 	if oldDeploy.UID != "" {
+		// do not update selector when workload exists
 		matchLabels = oldDeploy.Spec.Selector.MatchLabels
 	}
 
 	podReconciler := NewPodReconciler(r.scheme, r.client)
-	podTemplateApplyConfiguration, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role)
+	podTemplateApplyConfiguration, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role, maps.Clone(matchLabels))
 	if err != nil {
 		return nil, err
 	}
-	podTemplateApplyConfiguration.WithLabels(matchLabels)
 
 	// construct deployment apply configuration
 	deployConfig := appsapplyv1.Deployment(rbg.GetWorkloadName(role), rbg.Namespace).
@@ -204,12 +206,12 @@ func (r *DeploymentReconciler) RecreateWorkload(ctx context.Context, rbg *worklo
 		return nil
 	}
 
-	logger.Info(fmt.Sprintf("Recreate deploy workload, delete deploy %s", deployName))
+	logger.Info(fmt.Sprintf("Recreate deployment workload, delete deployment %s", deployName))
 	if err := r.client.Delete(ctx, &deploy); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 
-	// wait new deploy create
+	// wait new deployment create
 	var retErr error
 	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 		var newDeploy appsv1.Deployment
@@ -224,27 +226,26 @@ func (r *DeploymentReconciler) RecreateWorkload(ctx context.Context, rbg *worklo
 	})
 
 	if err != nil {
-		logger.Error(retErr, "wait new deploy creating error")
+		logger.Error(retErr, "wait new deployment creating error")
 		return retErr
 	}
 
 	return nil
 }
 
-func SemanticallyEqualDeployment(dep1, dep2 *appsv1.Deployment) (bool, error) {
-	if dep1 == nil || dep2 == nil {
-		if dep1 != dep2 {
-			return false, fmt.Errorf("object is nil")
-		} else {
-			return true, nil
-		}
+func SemanticallyEqualDeployment(oldDeploy, newDeploy *appsv1.Deployment) (bool, error) {
+	if oldDeploy == nil || oldDeploy.UID == "" {
+		return false, errors.New("old deployment not exist")
+	}
+	if newDeploy == nil {
+		return false, fmt.Errorf("new deployment is nil")
 	}
 
-	if equal, err := objectMetaEqual(dep1.ObjectMeta, dep2.ObjectMeta); !equal {
+	if equal, err := objectMetaEqual(oldDeploy.ObjectMeta, newDeploy.ObjectMeta); !equal {
 		return false, fmt.Errorf("objectMeta not equal: %s", err.Error())
 	}
 
-	if equal, err := deploymentSpecEqual(dep1.Spec, dep2.Spec); !equal {
+	if equal, err := deploymentSpecEqual(oldDeploy.Spec, newDeploy.Spec); !equal {
 		return false, fmt.Errorf("spec not equal: %s", err.Error())
 	}
 

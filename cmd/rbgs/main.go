@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
+	schev1alpha1 "sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
 	"time"
 
 	rawzap "go.uber.org/zap"
@@ -62,6 +63,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(apiextv1.AddToScheme(scheme))
 	utilruntime.Must(lwsv1.AddToScheme(scheme))
+	utilruntime.Must(schev1alpha1.AddToScheme(scheme))
 
 	utilruntime.Must(workloadsv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme

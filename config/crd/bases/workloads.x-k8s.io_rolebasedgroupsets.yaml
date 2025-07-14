@@ -55,6 +55,24 @@ spec:
               template:
                 description: Template describes the RoleBasedGroup that will be created.
                 properties:
+                  podGroupPolicy:
+                    description: Configuration for the PodGroup to enable gang-scheduling
+                      via supported plugins.
+                    properties:
+                      kubeScheduling:
+                        description: KubeScheduling plugin from the Kubernetes scheduler-plugins
+                          for gang-scheduling.
+                        properties:
+                          scheduleTimeoutSeconds:
+                            default: 60
+                            description: |-
+                              Time threshold to schedule PodGroup for gang-scheduling.
+                              If the scheduling timeout is equal to 0, the default value is used.
+                              Defaults to 60 seconds.
+                            format: int32
+                            type: integer
+                        type: object
+                    type: object
                   roles:
                     items:
                       description: RoleSpec defines the specification for a role in

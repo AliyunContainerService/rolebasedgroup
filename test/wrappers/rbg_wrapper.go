@@ -28,6 +28,20 @@ func (rbgWrapper *RoleBasedGroupWrapper) AddRole(role workloadsv1alpha.RoleSpec)
 	return rbgWrapper
 }
 
+func (rbgWrapper *RoleBasedGroupWrapper) WithGangScheduling(gangScheduling bool) *RoleBasedGroupWrapper {
+	if gangScheduling {
+		rbgWrapper.Spec.PodGroupPolicy = &workloadsv1alpha.PodGroupPolicy{
+			PodGroupPolicySource: workloadsv1alpha.PodGroupPolicySource{
+				KubeScheduling: &workloadsv1alpha.KubeSchedulingPodGroupPolicySource{},
+			},
+		}
+	} else {
+		rbgWrapper.Spec.PodGroupPolicy = nil
+	}
+
+	return rbgWrapper
+}
+
 func BuildBasicRoleBasedGroup(name, ns string) *RoleBasedGroupWrapper {
 	return &RoleBasedGroupWrapper{
 		workloadsv1alpha.RoleBasedGroup{

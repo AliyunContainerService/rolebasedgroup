@@ -2,6 +2,7 @@ package reconciler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -14,6 +15,7 @@ import (
 	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	coreapplyv1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	"maps"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -80,7 +82,7 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 
 	equal, err := SemanticallyEqualStatefulSet(oldSts, newSts)
 	if err != nil {
-		logger.V(1).Info(fmt.Sprintf("sts not equal, diff: %s", err.Error()))
+		logger.Info(fmt.Sprintf("sts not equal, diff: %s", err.Error()))
 	}
 
 	stsUpdated := !equal
@@ -90,7 +92,7 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 	}
 
 	if equal && partition == *oldSts.Spec.UpdateStrategy.RollingUpdate.Partition && *oldSts.Spec.Replicas == *role.Replicas {
-		logger.V(1).Info("sts equal, skip reconcile")
+		logger.Info("sts equal, skip reconcile")
 		return nil
 	}
 
@@ -373,15 +375,15 @@ func (r *StatefulSetReconciler) constructStatefulSetApplyConfiguration(
 ) (*appsapplyv1.StatefulSetApplyConfiguration, error) {
 	matchLabels := rbg.GetCommonLabelsFromRole(role)
 	if oldSts.UID != "" {
+		// do not update selector when workload exists
 		matchLabels = oldSts.Spec.Selector.MatchLabels
 	}
 
 	podReconciler := NewPodReconciler(r.scheme, r.client)
-	podTemplateApplyConfiguration, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role)
+	podTemplateApplyConfiguration, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role, maps.Clone(matchLabels))
 	if err != nil {
 		return nil, err
 	}
-	podTemplateApplyConfiguration.WithLabels(matchLabels)
 
 	// construct statefulset apply configuration
 	statefulSetConfig := appsapplyv1.StatefulSet(rbg.GetWorkloadName(role), rbg.Namespace).
@@ -557,20 +559,19 @@ func (r *StatefulSetReconciler) RecreateWorkload(ctx context.Context, rbg *workl
 	return nil
 }
 
-func SemanticallyEqualStatefulSet(sts1, sts2 *appsv1.StatefulSet) (bool, error) {
-	if sts1 == nil || sts2 == nil {
-		if sts1 != sts2 {
-			return false, fmt.Errorf("object is nil")
-		} else {
-			return true, nil
-		}
+func SemanticallyEqualStatefulSet(oldSts, newSts *appsv1.StatefulSet) (bool, error) {
+	if oldSts == nil || oldSts.UID == "" {
+		return false, errors.New("old sts not exist")
+	}
+	if newSts == nil {
+		return false, fmt.Errorf("new sts is nil")
 	}
 
-	if equal, err := objectMetaEqual(sts1.ObjectMeta, sts2.ObjectMeta); !equal {
+	if equal, err := objectMetaEqual(oldSts.ObjectMeta, newSts.ObjectMeta); !equal {
 		return false, fmt.Errorf("objectMeta not equal: %s", err.Error())
 	}
 
-	if equal, err := statefulSetSpecEqual(sts1.Spec, sts2.Spec); !equal {
+	if equal, err := statefulSetSpecEqual(oldSts.Spec, newSts.Spec); !equal {
 		return false, fmt.Errorf("spec not equal: %s", err.Error())
 	}
 	return true, nil

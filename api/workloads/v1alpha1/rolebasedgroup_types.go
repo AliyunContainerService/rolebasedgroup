@@ -30,6 +30,34 @@ type RoleBasedGroupSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:Required
 	Roles []RoleSpec `json:"roles"`
+
+	// Configuration for the PodGroup to enable gang-scheduling via supported plugins.
+	PodGroupPolicy *PodGroupPolicy `json:"podGroupPolicy,omitempty"`
+}
+
+// PodGroupPolicy represents a PodGroup configuration for gang-scheduling.
+type PodGroupPolicy struct {
+	// Configuration for gang-scheduling using various plugins.
+	PodGroupPolicySource `json:",inline"`
+}
+
+// PodGroupPolicySource represents supported plugins for gang-scheduling.
+// Only one of its members may be specified.
+type PodGroupPolicySource struct {
+	// KubeScheduling plugin from the Kubernetes scheduler-plugins for gang-scheduling.
+	KubeScheduling *KubeSchedulingPodGroupPolicySource `json:"kubeScheduling,omitempty"`
+
+	// TODO (gujingit): Add support for Volcano gang-scheduler.
+}
+
+// KubeSchedulingPodGroupPolicySource represents configuration for  Kubernetes scheduling plugin.
+// The number of min members in the PodGroupSpec is always equal to the number of rbg pods.
+type KubeSchedulingPodGroupPolicySource struct {
+	// Time threshold to schedule PodGroup for gang-scheduling.
+	// If the scheduling timeout is equal to 0, the default value is used.
+	// Defaults to 60 seconds.
+	// +kubebuilder:default=60
+	ScheduleTimeoutSeconds *int32 `json:"scheduleTimeoutSeconds,omitempty"`
 }
 
 // RolloutStrategy defines the strategy that the rbg controller

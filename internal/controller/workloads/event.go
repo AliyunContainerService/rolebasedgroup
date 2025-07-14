@@ -8,6 +8,7 @@ const (
 	FailedReconcileWorkload   = "FailedReconcileWorkload"
 	Succeed                   = "Succeed"
 	FailedUpdateStatus        = "FailedUpdateStatus"
+	FailedCreatePodGroup      = "FailedCreatePodGroup"
 )
 
 // rbg-scaling-adapter events

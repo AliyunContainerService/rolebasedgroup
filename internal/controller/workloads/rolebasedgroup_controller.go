@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"reflect"
+	"sigs.k8s.io/rbgs/pkg/scheduler"
+	schev1alpha1 "sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
 	"sync"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -97,6 +99,14 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	sortedRoles, err := dependencyManager.SortRoles(ctx, rbg)
 	if err != nil {
 		r.recorder.Event(rbg, corev1.EventTypeWarning, InvalidRoleDependency, err.Error())
+		return ctrl.Result{}, err
+	}
+
+	// Process PodGroup
+
+	podGroupManager := scheduler.NewPodGroupScheduler(r.client)
+	if err := podGroupManager.Reconcile(ctx, rbg); err != nil {
+		r.recorder.Event(rbg, corev1.EventTypeWarning, FailedCreatePodGroup, err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -250,6 +260,7 @@ func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager, options co
 		Owns(&appsv1.StatefulSet{}, builder.WithPredicates(WorkloadPredicate())).
 		Owns(&appsv1.Deployment{}, builder.WithPredicates(WorkloadPredicate())).
 		Owns(&corev1.Service{}).
+		Owns(&schev1alpha1.PodGroup{}).
 		Named("workloads-rolebasedgroup")
 
 	err := utils.CheckCrdExists(r.apiReader, reconciler.LwsCrdName)

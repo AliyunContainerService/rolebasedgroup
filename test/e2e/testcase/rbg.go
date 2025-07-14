@@ -3,6 +3,9 @@ package testcase
 import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/test/e2e/framework"
 	"sigs.k8s.io/rbgs/test/utils"
@@ -80,6 +83,55 @@ func RunRbgControllerTestCases(f *framework.Framework) {
 
 			f.ExpectWorkloadNotExist(rbg, wrappers.BuildBasicRole("role-1").Obj())
 			f.ExpectWorkloadNotExist(rbg, wrappers.BuildBasicRole("role-2").Obj())
+		})
+
+		ginkgo.It("rbg with gang scheduling", func() {
+			rbg := wrappers.BuildBasicRoleBasedGroup("e2e-test", f.Namespace).
+				WithGangScheduling(true).
+				WithRoles([]workloadsv1alpha1.RoleSpec{
+					{
+
+						Name:     "prefill",
+						Replicas: ptr.To(int32(1)),
+						RolloutStrategy: workloadsv1alpha1.RolloutStrategy{
+							Type: workloadsv1alpha1.RollingUpdateStrategyType,
+						},
+						Workload: workloadsv1alpha1.WorkloadSpec{
+							APIVersion: "apps/v1",
+							Kind:       "StatefulSet",
+						},
+						Template: wrappers.BuildBasicPodTemplateSpec().WithResources(corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								"nvidia.com/gpu": resource.MustParse("1"),
+							},
+						}, 0).Obj(),
+					},
+					{
+
+						Name:     "decode",
+						Replicas: ptr.To(int32(1)),
+						RolloutStrategy: workloadsv1alpha1.RolloutStrategy{
+							Type: workloadsv1alpha1.RollingUpdateStrategyType,
+						},
+						Workload: workloadsv1alpha1.WorkloadSpec{
+							APIVersion: "apps/v1",
+							Kind:       "StatefulSet",
+						},
+						Template: wrappers.BuildBasicPodTemplateSpec().WithResources(corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								"nvidia.com/gpu": resource.MustParse("1"),
+							},
+						}, 0).Obj(),
+					},
+				}).Obj()
+
+			gomega.Expect(f.Client.Create(f.Ctx, rbg)).Should(gomega.Succeed())
+
+			podGroupLabel := map[string]string{
+				workloadsv1alpha1.PodGroupLabelKey: rbg.Name,
+			}
+
+			f.ExpectWorkloadLabelContains(rbg, rbg.Spec.Roles[0], podGroupLabel)
 		})
 
 	})

@@ -48,6 +48,18 @@ rules:
       - update
       - watch
   - apiGroups:
+      - "scheduling.x-k8s.io"
+    resources:
+      - podgroups
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
       - ""
     resources:
       - configmaps

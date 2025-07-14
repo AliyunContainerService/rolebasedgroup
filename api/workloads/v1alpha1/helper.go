@@ -6,6 +6,8 @@ import (
 )
 
 func (rbg *RoleBasedGroup) GetCommonLabelsFromRole(role *RoleSpec) map[string]string {
+	// Be careful to change these labels.
+	// They are used as sts.spec.selector which can not be updated. If changed, may cause all exist rbgs failed.
 	return map[string]string{
 		SetNameLabelKey: rbg.Name,
 		SetRoleLabelKey: role.Name,
@@ -16,6 +18,18 @@ func (rbg *RoleBasedGroup) GetCommonAnnotationsFromRole(role *RoleSpec) map[stri
 	return map[string]string{
 		RoleSizeAnnotationKey: fmt.Sprintf("%d", *role.Replicas),
 	}
+}
+
+func (rbg *RoleBasedGroup) GetGroupSize() int {
+	ret := 0
+	for _, role := range rbg.Spec.Roles {
+		if role.Workload.String() == LeaderWorkerSetWorkloadType {
+			ret += int(*role.LeaderWorkerSet.Size) * int(*role.Replicas)
+		} else {
+			ret += int(*role.Replicas)
+		}
+	}
+	return ret
 }
 
 func (rbg *RoleBasedGroup) GetWorkloadName(role *RoleSpec) string {
@@ -48,6 +62,13 @@ func (rbg *RoleBasedGroup) GetRoleStatus(roleName string) (status RoleStatus, fo
 		}
 	}
 	return
+}
+
+func (rbg *RoleBasedGroup) EnableGangScheduling() bool {
+	if rbg.Spec.PodGroupPolicy != nil && rbg.Spec.PodGroupPolicy.PodGroupPolicySource.KubeScheduling != nil {
+		return true
+	}
+	return false
 }
 
 func (rbgsa *RoleBasedGroupScalingAdapter) ContainsRBGOwner(rbg *RoleBasedGroup) bool {

@@ -59,7 +59,7 @@ func (d *DeploymentEqualChecker) ExpectWorkloadEqual(rbg *v1alpha1.RoleBasedGrou
 
 	// check deployment ready
 	if deployment.Status.ReadyReplicas != *deployment.Spec.Replicas {
-		return fmt.Errorf("deployment not all ready")
+		return fmt.Errorf("deployment not all ready, status.ready: %d, status.replicas: %d", deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
 	}
 
 	// check engine runtime container exist
@@ -146,7 +146,8 @@ func (s *StatefulSetEqualChecker) ExpectWorkloadEqual(rbg *v1alpha1.RoleBasedGro
 
 	// check sts ready
 	if sts.Status.ReadyReplicas != *sts.Spec.Replicas {
-		return fmt.Errorf("sts not all ready")
+		return fmt.Errorf("sts not all ready, status.ready: %d, status.replicas: %d",
+			sts.Status.ReadyReplicas, *sts.Spec.Replicas)
 	}
 
 	// check engine runtime container exist
@@ -223,7 +224,7 @@ func (s *LeaderWorkerSetEqualChecker) ExpectWorkloadEqual(rbg *v1alpha1.RoleBase
 
 	// check lws ready
 	if lws.Status.ReadyReplicas != lws.Status.Replicas {
-		return fmt.Errorf("lws not all ready")
+		return fmt.Errorf("lws not all ready, status.ready: %d, status.replicas: %d", lws.Status.ReadyReplicas, lws.Status.Replicas)
 	}
 
 	// 2. check engine runtime container exist

@@ -178,7 +178,6 @@ func (r *PodReconciler) podToRBG(ctx context.Context, obj client.Object) []recon
 
 	curRole, err := rbg.GetRole(roleName)
 	if err != nil {
-		logger.Error(err, fmt.Sprintf("cannot get role by name %s from rbg %s", roleName, rbgName))
 		return []reconcile.Request{}
 	}
 

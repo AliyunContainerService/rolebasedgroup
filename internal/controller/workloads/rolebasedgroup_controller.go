@@ -19,6 +19,7 @@ package workloads
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"reflect"
 	"sync"
 
@@ -27,7 +28,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/record"
@@ -172,7 +172,7 @@ func (r *RoleBasedGroupReconciler) deleteRoles(ctx context.Context, rbg *workloa
 		errs = append(errs, err)
 	}
 
-	stsRecon := reconciler.NewDeploymentReconciler(r.scheme, r.client)
+	stsRecon := reconciler.NewStatefulSetReconciler(r.scheme, r.client)
 	if err := stsRecon.CleanupOrphanedWorkloads(ctx, rbg); err != nil {
 		errs = append(errs, err)
 	}

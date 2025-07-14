@@ -3,6 +3,7 @@ package reconciler
 import (
 	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"reflect"
 	"time"
@@ -152,14 +153,16 @@ func (r *DeploymentReconciler) CleanupOrphanedWorkloads(ctx context.Context, rbg
 	deployList := &appsv1.DeploymentList{}
 	if err := r.client.List(context.Background(), deployList, client.InNamespace(rbg.Namespace),
 		client.MatchingLabels(map[string]string{
-			"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName,
-			"app.kubernetes.io/name":       rbg.Name,
+			workloadsv1alpha1.SetNameLabelKey: rbg.Name,
 		}),
 	); err != nil {
 		return err
 	}
 
 	for _, deploy := range deployList.Items {
+		if !metav1.IsControlledBy(&deploy, rbg) {
+			continue
+		}
 		found := false
 		for _, role := range rbg.Spec.Roles {
 			if role.Workload.Kind == "Deployment" && rbg.GetWorkloadName(&role) == deploy.Name {

@@ -79,7 +79,6 @@ func (r *PodReconciler) ConstructPodTemplateSpecApplyConfiguration(
 		return nil, err
 	}
 	podTemplateApplyConfiguration.WithLabels(rbg.GetCommonLabelsFromRole(role))
-	podTemplateApplyConfiguration.WithAnnotations(rbg.GetCommonAnnotationsFromRole(role))
 
 	return podTemplateApplyConfiguration, nil
 }

@@ -102,26 +102,3 @@ func RunLeaderWorkerSetWorkloadTestCases(f *framework.Framework) {
 		f.ExpectRbgCondition(rbg, workloadsv1alpha1.RoleBasedGroupRestartInProgress, metav1.ConditionFalse)
 	})
 }
-
-//func getPatch(podTemplate corev1.PodTemplateSpec) ([]byte, error) {
-//	str := &bytes.Buffer{}
-//	clone := podTemplate.DeepCopy()
-//
-//	if err := unstructured.UnstructuredJSONScheme.Encode(clone, str); err != nil {
-//		return nil, err
-//	}
-//	var raw map[string]interface{}
-//	if err := json.Unmarshal(str.Bytes(), &raw); err != nil {
-//		return nil, err
-//	}
-//	objCopy := make(map[string]interface{})
-//	specCopy := make(map[string]interface{})
-//	spec := raw["spec"].(map[string]interface{})
-//
-//	template := spec["leaderWorkerTemplate"].(map[string]interface{})
-//	specCopy["leaderWorkerTemplate"] = template
-//	template["$patch"] = "replace"
-//	objCopy["spec"] = specCopy
-//	return json.Marshal(objCopy)
-//
-//}

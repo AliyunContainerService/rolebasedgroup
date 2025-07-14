@@ -20,25 +20,26 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	"time"
 
 	rawzap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -305,17 +306,23 @@ func main() {
 }
 
 func cacheOptions() cache.Options {
+	keyExistsRequirement, err := labels.NewRequirement(workloadsv1alpha1.SetNameLabelKey, selection.Exists, nil)
+	if err != nil {
+		panic(err)
+	}
+	keyExistsSelector := labels.NewSelector().Add(*keyExistsRequirement)
+
 	return cache.Options{
 		Scheme: scheme,
 		ByObject: map[client.Object]cache.ByObject{
 			&appsv1.StatefulSet{}: {
-				Label: labels.SelectorFromSet(labels.Set{"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName}),
+				Label: keyExistsSelector,
 			},
 			&appsv1.Deployment{}: {
-				Label: labels.SelectorFromSet(labels.Set{"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName}),
+				Label: keyExistsSelector,
 			},
 			&corev1.Service{}: {
-				Label: labels.SelectorFromSet(labels.Set{"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName}),
+				Label: keyExistsSelector,
 			},
 		},
 	}

@@ -465,14 +465,16 @@ func (r *StatefulSetReconciler) CleanupOrphanedWorkloads(ctx context.Context, rb
 	stsList := &appsv1.StatefulSetList{}
 	if err := r.client.List(context.Background(), stsList, client.InNamespace(rbg.Namespace),
 		client.MatchingLabels(map[string]string{
-			"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName,
-			"app.kubernetes.io/name":       rbg.Name,
+			workloadsv1alpha1.SetNameLabelKey: rbg.Name,
 		}),
 	); err != nil {
 		return err
 	}
 
 	for _, sts := range stsList.Items {
+		if !v1.IsControlledBy(&sts, rbg) {
+			continue
+		}
 		found := false
 		for _, role := range rbg.Spec.Roles {
 			if role.Workload.Kind == "StatefulSet" && rbg.GetWorkloadName(&role) == sts.Name {

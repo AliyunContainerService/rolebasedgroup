@@ -86,3 +86,12 @@ func (f *Framework) ExpectWorkloadLabelContains(rbg *v1alpha1.RoleBasedGroup, ro
 		return wlCheck.ExpectLabelContains(rbg, role, labels...) == nil
 	}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
 }
+
+func (f *Framework) ExpectWorkloadNotExist(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec) {
+	wlCheck, err := NewWorkloadEqualChecker(f.Ctx, f.Client, role.Workload.String())
+	gomega.Expect(err).To(gomega.BeNil())
+
+	gomega.Eventually(func() bool {
+		return wlCheck.ExpectWorkloadNotExist(rbg, role) == nil
+	}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
+}

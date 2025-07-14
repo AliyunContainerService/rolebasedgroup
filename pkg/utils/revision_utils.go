@@ -30,9 +30,6 @@ func ListRevisions(ctx context.Context, k8sClient client.Client, parent metav1.O
 	return owned, err
 }
 
-// getHighestRevision finds the next valid revision number based on revisions. If the length of revisions
-// is 0 this is 1. Otherwise, it is 1 greater than the largest revision's Revision. It also returns the revision
-// with the highest Revision value.
 func GetHighestRevision(revisions []*appsv1.ControllerRevision) *appsv1.ControllerRevision {
 	count := len(revisions)
 	if count <= 0 {

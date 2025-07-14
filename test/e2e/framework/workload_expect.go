@@ -2,9 +2,11 @@ package framework
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	"sigs.k8s.io/rbgs/api/workloads/v1alpha1"
@@ -14,6 +16,7 @@ import (
 type WorkloadEqualChecker interface {
 	ExpectWorkloadEqual(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec) error
 	ExpectLabelContains(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec, labels ...map[string]string) error
+	ExpectWorkloadNotExist(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec) error
 }
 
 func NewWorkloadEqualChecker(ctx context.Context, client client.Client, workloadType string) (WorkloadEqualChecker, error) {
@@ -91,6 +94,21 @@ func (d *DeploymentEqualChecker) ExpectLabelContains(rbg *v1alpha1.RoleBasedGrou
 	return nil
 }
 
+func (d *DeploymentEqualChecker) ExpectWorkloadNotExist(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec) error {
+	deployment := &appsv1.Deployment{}
+	err := d.client.Get(d.ctx, client.ObjectKey{
+		Name:      rbg.GetWorkloadName(&role),
+		Namespace: rbg.Namespace,
+	}, deployment)
+	if err == nil {
+		return errors.New("workload still exists")
+	}
+	if !apierrors.IsNotFound(err) {
+		return err
+	}
+	return nil
+}
+
 type StatefulSetEqualChecker struct {
 	ctx    context.Context
 	client client.Client
@@ -160,6 +178,21 @@ func (s *StatefulSetEqualChecker) ExpectLabelContains(rbg *v1alpha1.RoleBasedGro
 		}
 	}
 
+	return nil
+}
+
+func (s *StatefulSetEqualChecker) ExpectWorkloadNotExist(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec) error {
+	sts := &appsv1.StatefulSet{}
+	err := s.client.Get(s.ctx, client.ObjectKey{
+		Name:      rbg.GetWorkloadName(&role),
+		Namespace: rbg.Namespace,
+	}, sts)
+	if err == nil {
+		return errors.New("workload still exists")
+	}
+	if !apierrors.IsNotFound(err) {
+		return err
+	}
 	return nil
 }
 
@@ -241,5 +274,20 @@ func (s *LeaderWorkerSetEqualChecker) ExpectLabelContains(rbg *v1alpha1.RoleBase
 		}
 	}
 
+	return nil
+}
+
+func (s *LeaderWorkerSetEqualChecker) ExpectWorkloadNotExist(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec) error {
+	lws := &lwsv1.LeaderWorkerSet{}
+	err := s.client.Get(s.ctx, client.ObjectKey{
+		Name:      rbg.GetWorkloadName(&role),
+		Namespace: rbg.Namespace,
+	}, lws)
+	if err == nil {
+		return errors.New("workload still exists")
+	}
+	if !apierrors.IsNotFound(err) {
+		return err
+	}
 	return nil
 }

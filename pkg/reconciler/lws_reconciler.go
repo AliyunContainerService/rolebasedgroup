@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"time"
 
@@ -117,14 +118,16 @@ func (r *LeaderWorkerSetReconciler) CleanupOrphanedWorkloads(ctx context.Context
 	lwsList := &lwsv1.LeaderWorkerSetList{}
 	if err := r.client.List(ctx, lwsList, client.InNamespace(rbg.Namespace),
 		client.MatchingLabels(map[string]string{
-			"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName,
-			"app.kubernetes.io/name":       rbg.Name,
+			workloadsv1alpha1.SetNameLabelKey: rbg.Name,
 		}),
 	); err != nil {
 		return err
 	}
 
 	for _, lws := range lwsList.Items {
+		if !metav1.IsControlledBy(&lws, rbg) {
+			continue
+		}
 		found := false
 		for _, role := range rbg.Spec.Roles {
 			if role.Workload.Kind == "LeaderWorkerSet" && rbg.GetWorkloadName(&role) == lws.Name {

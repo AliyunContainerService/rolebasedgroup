@@ -7,12 +7,8 @@ import (
 
 func (rbg *RoleBasedGroup) GetCommonLabelsFromRole(role *RoleSpec) map[string]string {
 	return map[string]string{
-		"app.kubernetes.io/name":       rbg.Name,
-		"app.kubernetes.io/component":  role.Name,
-		"app.kubernetes.io/managed-by": ControllerName,
-		"app.kubernetes.io/instance":   rbg.Name,
-		SetNameLabelKey:                rbg.Name,
-		SetRoleLabelKey:                role.Name,
+		SetNameLabelKey: rbg.Name,
+		SetRoleLabelKey: role.Name,
 	}
 }
 

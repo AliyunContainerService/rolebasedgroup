@@ -13,17 +13,11 @@ const (
 	// Value: RoleSpec.name from RoleBasedGroup.spec.roles[]
 	SetRoleLabelKey = RBGDomainPrefix + "role"
 
-	// SetRoleIndexLabelKey identifies pod's position in role replica set
-	// Value: Zero-padded numeric index (e.g., "001", "002")
-	SetRoleIndexLabelKey = RBGDomainPrefix + "role-index"
-
 	// RevisionAnnotationKey tracks the controller revision hash for template changes
 	// Value: SHA256 hash of RoleSpec template
 	RevisionAnnotationKey = RBGDomainPrefix + "revision"
 
 	RoleSizeAnnotationKey string = RBGDomainPrefix + "role-size"
-
-	GroupSizeAnnotationKey string = RBGDomainPrefix + "group-size"
 )
 
 type RolloutStrategyType string

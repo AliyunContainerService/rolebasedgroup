@@ -60,6 +60,28 @@ func RunRbgControllerTestCases(f *framework.Framework) {
 			f.ExpectRbgEqual(rbg)
 		})
 
+		ginkgo.It("rbg with orphan roles", func() {
+			rbg := wrappers.BuildBasicRoleBasedGroup("e2e-test", f.Namespace).WithRoles(
+				[]workloadsv1alpha1.RoleSpec{
+					wrappers.BuildBasicRole("role-1").Obj(),
+					wrappers.BuildBasicRole("role-2").Obj(),
+				}).Obj()
+			gomega.Expect(f.Client.Create(f.Ctx, rbg)).Should(gomega.Succeed())
+			f.ExpectRbgEqual(rbg)
+
+			// update role name
+			utils.UpdateRbg(f.Ctx, f.Client, rbg, func(rbg *workloadsv1alpha1.RoleBasedGroup) {
+				rbg.Spec.Roles = []workloadsv1alpha1.RoleSpec{
+					wrappers.BuildBasicRole("sts-1").Obj(),
+					wrappers.BuildBasicRole("sts-2").Obj(),
+				}
+			})
+			f.ExpectRbgEqual(rbg)
+
+			f.ExpectWorkloadNotExist(rbg, wrappers.BuildBasicRole("role-1").Obj())
+			f.ExpectWorkloadNotExist(rbg, wrappers.BuildBasicRole("role-2").Obj())
+		})
+
 	})
 
 }

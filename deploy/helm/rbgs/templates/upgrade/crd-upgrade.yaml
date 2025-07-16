@@ -1,0 +1,67 @@
+{{ if .Values.crdUpgrade.enabled -}}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: rbgs-crds-upgrade-{{ replace "." "" .Chart.AppVersion }}
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-4"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+{{- if .Values.crdUpgrade.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ .Values.crdUpgrade.ttlSecondsAfterFinished }}
+{{- end }}
+  template:
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: rbgs-crds-upgrade
+      containers:
+        - name: rbgs-crds-upgrade
+          image: "{{ .Values.crdUpgrade.repository }}:{{ .Values.crdUpgrade.imageTag | default .Chart.AppVersion }}"
+      restartPolicy: OnFailure
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rbgs-crds-upgrade
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+rules:
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["create", "get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rbgs-crds-upgrade
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rbgs-crds-upgrade
+subjects:
+  - kind: ServiceAccount
+    name: rbgs-crds-upgrade
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rbgs-crds-upgrade
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+{{- end }}

@@ -93,7 +93,7 @@ func RunRbgControllerTestCases(f *framework.Framework) {
 
 						Name:     "prefill",
 						Replicas: ptr.To(int32(1)),
-						RolloutStrategy: workloadsv1alpha1.RolloutStrategy{
+						RolloutStrategy: &workloadsv1alpha1.RolloutStrategy{
 							Type: workloadsv1alpha1.RollingUpdateStrategyType,
 						},
 						Workload: workloadsv1alpha1.WorkloadSpec{
@@ -110,7 +110,7 @@ func RunRbgControllerTestCases(f *framework.Framework) {
 
 						Name:     "decode",
 						Replicas: ptr.To(int32(1)),
-						RolloutStrategy: workloadsv1alpha1.RolloutStrategy{
+						RolloutStrategy: &workloadsv1alpha1.RolloutStrategy{
 							Type: workloadsv1alpha1.RollingUpdateStrategyType,
 						},
 						Workload: workloadsv1alpha1.WorkloadSpec{

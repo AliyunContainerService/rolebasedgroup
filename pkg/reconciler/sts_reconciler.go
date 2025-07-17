@@ -51,12 +51,12 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 	logger := log.FromContext(ctx)
 	logger.V(1).Info("start to reconciling sts workload")
 
-	rollingUpdate, err := validateRolloutStrategy(role.RolloutStrategy.RollingUpdate, int(*role.Replicas))
+	rollingStrategy, err := validateRolloutStrategy(role.RolloutStrategy, int(*role.Replicas))
 	if err != nil {
 		logger.Error(err, "Invalid rollout strategy")
 		return err
 	}
-	role.RolloutStrategy.RollingUpdate = rollingUpdate
+	role.RolloutStrategy = rollingStrategy
 
 	oldSts := &appsv1.StatefulSet{}
 	err = r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldSts)
@@ -613,20 +613,22 @@ func SemanticallyEqualService(svc1, svc2 *corev1.Service) (bool, error) {
 	return true, nil
 }
 
-func validateRolloutStrategy(rollingUpdate *workloadsv1alpha1.RollingUpdate, replicas int) (*workloadsv1alpha1.RollingUpdate, error) {
-	if rollingUpdate == nil {
-		rollingUpdate = &workloadsv1alpha1.RollingUpdate{
-			MaxUnavailable: intstr.FromInt32(1),
-			MaxSurge:       intstr.FromInt32(0),
-		}
-		return rollingUpdate, nil
+func validateRolloutStrategy(rollingStrategy *workloadsv1alpha1.RolloutStrategy, replicas int) (*workloadsv1alpha1.RolloutStrategy, error) {
+	if rollingStrategy == nil || rollingStrategy.RollingUpdate == nil {
+		return &workloadsv1alpha1.RolloutStrategy{
+			Type: workloadsv1alpha1.RollingUpdateStrategyType,
+			RollingUpdate: &workloadsv1alpha1.RollingUpdate{
+				MaxUnavailable: intstr.FromInt32(1),
+				MaxSurge:       intstr.FromInt32(0),
+			},
+		}, nil
 	}
 
-	maxSurge, err := intstr.GetScaledValueFromIntOrPercent(&rollingUpdate.MaxSurge, replicas, true)
+	maxSurge, err := intstr.GetScaledValueFromIntOrPercent(&rollingStrategy.RollingUpdate.MaxSurge, replicas, true)
 	if err != nil {
 		return nil, err
 	}
-	maxAvailable, err := intstr.GetScaledValueFromIntOrPercent(&rollingUpdate.MaxUnavailable, replicas, false)
+	maxAvailable, err := intstr.GetScaledValueFromIntOrPercent(&rollingStrategy.RollingUpdate.MaxUnavailable, replicas, false)
 	if err != nil {
 		return nil, err
 	}
@@ -634,5 +636,5 @@ func validateRolloutStrategy(rollingUpdate *workloadsv1alpha1.RollingUpdate, rep
 		return nil, fmt.Errorf("RollingUpdate is invalid: rolloutStrategy.rollingUpdate.maxUnavailable may not be 0 when maxSurge is 0")
 	}
 
-	return rollingUpdate, nil
+	return rollingStrategy, nil
 }

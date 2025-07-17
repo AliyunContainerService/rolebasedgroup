@@ -55,7 +55,7 @@ func (roleWrapper *RoleWrapper) WithDependencies(dependencies []string) *RoleWra
 }
 
 func (roleWrapper *RoleWrapper) WithRollingUpdate(rollingUpdate workloadsv1alpha.RollingUpdate) *RoleWrapper {
-	roleWrapper.RolloutStrategy = workloadsv1alpha.RolloutStrategy{
+	roleWrapper.RolloutStrategy = &workloadsv1alpha.RolloutStrategy{
 		Type:          workloadsv1alpha.RollingUpdateStrategyType,
 		RollingUpdate: &rollingUpdate,
 	}
@@ -108,7 +108,7 @@ func BuildBasicRole(name string) *RoleWrapper {
 		workloadsv1alpha.RoleSpec{
 			Name:     name,
 			Replicas: ptr.To(int32(1)),
-			RolloutStrategy: workloadsv1alpha.RolloutStrategy{
+			RolloutStrategy: &workloadsv1alpha.RolloutStrategy{
 				Type: workloadsv1alpha.RollingUpdateStrategyType,
 			},
 			Workload: workloadsv1alpha.WorkloadSpec{
@@ -128,7 +128,7 @@ func BuildLwsRole(name string) *RoleWrapper {
 		workloadsv1alpha.RoleSpec{
 			Name:     name,
 			Replicas: ptr.To(int32(1)),
-			RolloutStrategy: workloadsv1alpha.RolloutStrategy{
+			RolloutStrategy: &workloadsv1alpha.RolloutStrategy{
 				Type: workloadsv1alpha.RollingUpdateStrategyType,
 			},
 			Workload: workloadsv1alpha.WorkloadSpec{

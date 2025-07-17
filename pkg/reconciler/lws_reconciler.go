@@ -206,7 +206,7 @@ func (r *LeaderWorkerSetReconciler) constructLWSApplyConfiguration(ctx context.C
 		)
 
 	// RollingUpdate
-	if role.RolloutStrategy.RollingUpdate != nil {
+	if role.RolloutStrategy != nil && role.RolloutStrategy.RollingUpdate != nil {
 		lwsSpecConfig = lwsSpecConfig.WithRolloutStrategy(lwsapplyv1.RolloutStrategy().WithRollingUpdateConfiguration(
 			lwsapplyv1.RollingUpdateConfiguration().
 				WithMaxSurge(role.RolloutStrategy.RollingUpdate.MaxSurge).

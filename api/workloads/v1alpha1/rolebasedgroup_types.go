@@ -122,7 +122,7 @@ type RoleSpec struct {
 	// RolloutStrategy defines the strategy that will be applied to update replicas
 	// when a revision is made to the leaderWorkerTemplate.
 	// +optional
-	RolloutStrategy RolloutStrategy `json:"rolloutStrategy,omitempty"`
+	RolloutStrategy *RolloutStrategy `json:"rolloutStrategy,omitempty"`
 
 	// RestartPolicy defines the restart policy when pod failures happen.
 	// +kubebuilder:default=None

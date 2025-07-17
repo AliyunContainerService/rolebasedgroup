@@ -108,7 +108,7 @@ func (r *DeploymentReconciler) constructDeployApplyConfiguration(
 			WithBlockOwnerDeletion(true).
 			WithController(true),
 		)
-	if role.RolloutStrategy.RollingUpdate != nil {
+	if role.RolloutStrategy != nil && role.RolloutStrategy.RollingUpdate != nil {
 		deployConfig = deployConfig.WithSpec(
 			deployConfig.Spec.WithStrategy(appsapplyv1.DeploymentStrategy().
 				WithType(appsv1.DeploymentStrategyType(role.RolloutStrategy.Type)).

@@ -1440,9 +1440,9 @@ spec:
                           minimum: 0
                           type: integer
                         restartPolicy:
-                          default: None
-                          description: RestartPolicy defines the restart policy when
-                            pod failures happen.
+                          description: |-
+                            RestartPolicy defines the restart policy when pod failures happen.
+                            The default value is RecreateRoleInstanceOnPodRestart for LWS and None for STS & Deploy. Therefore, no default value is set.
                           enum:
                           - None
                           - RecreateRBGOnPodRestart
